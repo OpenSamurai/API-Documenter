@@ -56,6 +56,8 @@ export interface ElectronAPI {
     platform: string
     // Document Generation
     exportPdf: (html: string, fileName: string) => Promise<void>
+    generateDocPdf: (markdown: string, fileName: string) => Promise<{ success: boolean; error?: string }>
+    previewDocPdf: (markdown: string) => Promise<{ success: boolean; data?: Uint8Array; error?: string }>
 }
 
 const electronAPI: ElectronAPI = {
@@ -100,7 +102,9 @@ const electronAPI: ElectronAPI = {
         return () => ipcRenderer.removeListener('update-progress', subscription)
     },
     platform: process.platform,
-    exportPdf: (html, fileName) => ipcRenderer.invoke('export-pdf', html, fileName)
+    exportPdf: (html, fileName) => ipcRenderer.invoke('export-pdf', html, fileName),
+    generateDocPdf: (markdown, fileName) => ipcRenderer.invoke('generate-doc-pdf', markdown, fileName),
+    previewDocPdf: (markdown) => ipcRenderer.invoke('preview-doc-pdf', markdown)
 }
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI)

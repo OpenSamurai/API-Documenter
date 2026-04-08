@@ -7,6 +7,8 @@ import mysql from 'mysql2/promise'
 import pg from 'pg'
 import { spawn } from 'child_process'
 import { autoUpdater } from 'electron-updater'
+import MarkdownIt from 'markdown-it'
+import puppeteer from 'puppeteer'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -30,6 +32,11 @@ function createWindow(): void {
 
     mainWindow.on('ready-to-show', () => {
         mainWindow?.show()
+    })
+
+    mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => {
+        console.error(`[Main Window] Failed to load URL: ${validatedURL}`)
+        console.error(`Error Code: ${errorCode} (${errorDescription})`)
     })
 
     mainWindow.webContents.setWindowOpenHandler((details) => {
@@ -136,6 +143,275 @@ ipcMain.handle("export-pdf", async (_, html, fileName) => {
     }
 
     win.close()
+})
+
+// Helper for PDF generation
+async function generatePdfBuffer(markdownContent: string) {
+    const md = new MarkdownIt({
+        html: true,
+        linkify: true,
+        typographer: true
+    })
+
+    const htmlContent = md.render(markdownContent)
+    const fullHtml = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <style>
+            @page {
+                size: A4;
+                margin: 20mm;
+            }
+            body {
+                font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+                line-height: 1.5;
+                color: #111827;
+                background-color: #ffffff;
+                margin: 0;
+                padding: 0;
+            }
+            .container {
+                width: 100%;
+            }
+            h1 {
+                font-size: 2.5rem;
+                font-weight: 800;
+                color: #111827;
+                margin-top: 0;
+                margin-bottom: 24px;
+                border-bottom: 2px solid #E5E7EB;
+                padding-bottom: 12px;
+            }
+            h2 {
+                font-size: 1.875rem;
+                font-weight: 700;
+                color: #1F2937;
+                margin-top: 48px;
+                margin-bottom: 16px;
+                background: #F3F4F6;
+                padding: 12px 16px;
+                border-radius: 8px;
+            }
+            h3 {
+                font-size: 1.5rem;
+                font-weight: 600;
+                color: #374151;
+                margin-top: 32px;
+                margin-bottom: 12px;
+                border-left: 4px solid #3B82F6;
+                padding-left: 16px;
+            }
+            h4 {
+                font-size: 1.125rem;
+                font-weight: 600;
+                color: #4B5563;
+                margin-top: 24px;
+                margin-bottom: 8px;
+                text-transform: uppercase;
+                letter-spacing: 0.025em;
+            }
+            h5 {
+                font-size: 1rem;
+                font-weight: 600;
+                color: #6B7280;
+                margin-top: 16px;
+                margin-bottom: 8px;
+            }
+            p {
+                margin: 12px 0;
+            }
+            .method {
+                display: inline-block;
+                padding: 2px 8px;
+                border-radius: 4px;
+                font-family: monospace;
+                font-weight: 700;
+                font-size: 0.875rem;
+                margin-right: 8px;
+                color: white;
+            }
+            .method-GET { background: #10B981; }
+            .method-POST { background: #3B82F6; }
+            .method-PUT { background: #F59E0B; }
+            .method-DELETE { background: #EF4444; }
+            .method-PATCH { background: #8B5CF6; }
+
+            /* Table of Contents Styling */
+            .toc-link {
+                color: #2563EB;
+                text-decoration: none;
+            }
+            .toc-list {
+                list-style: none;
+                padding-left: 0;
+            }
+            .toc-item {
+                margin-bottom: 8px;
+            }
+
+            /* Page Break support */
+            .page-break {
+                page-break-after: always;
+            }
+
+            /* Custom Header IDs for TOC anchoring */
+            h2[id], h3[id] {
+                scroll-margin-top: 20px;
+            }
+
+            .status-code {
+                display: inline-block;
+                padding: 2px 6px;
+                border-radius: 4px;
+                font-weight: 700;
+                font-size: 0.8125rem;
+                margin-left: 8px;
+            }
+            .status-2xx { background: #DCFCE7; color: #166534; }
+            .status-3xx { background: #FEF3C7; color: #92400E; }
+            .status-4xx { background: #FEE2E2; color: #991B1B; }
+            .status-5xx { background: #FEF2F2; color: #991B1B; }
+
+            .endpoint-header {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                margin-bottom: 24px;
+            }
+            
+            pre {
+                background-color: #0F172A;
+                color: #CBD5E1;
+                padding: 18px;
+                border-radius: 12px;
+                font-family: 'ui-monospace', SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+                font-size: 0.875rem;
+                line-height: 1.6;
+                overflow-x: auto;
+                margin: 16px 0;
+                border: 1px solid #1E293B;
+                box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.05);
+            }
+            code {
+                font-family: 'ui-monospace', SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+                background-color: #F1F5F9;
+                color: #334155;
+                padding: 0.2rem 0.4rem;
+                border-radius: 4px;
+                font-size: 0.8125rem;
+            }
+            pre code {
+                background-color: transparent;
+                color: inherit;
+                padding: 0;
+            }
+            table {
+                width: 100%;
+                border-collapse: collapse;
+                margin: 24px 0;
+                font-size: 0.875rem;
+            }
+            table th, table td {
+                padding: 12px 16px;
+                border: 1px solid #E2E8F0;
+                text-align: left;
+                vertical-align: top;
+            }
+            table th {
+                background-color: #F8FAFC;
+                font-weight: 700;
+                color: #475569;
+                text-transform: uppercase;
+                font-size: 0.75rem;
+                letter-spacing: 0.05em;
+            }
+            blockquote {
+                padding: 12px 24px;
+                color: #64748B;
+                border-left: 6px solid #E2E8F0;
+                background: #F8FAFC;
+                margin: 24px 0;
+                font-style: italic;
+                border-radius: 0 8px 8px 0;
+            }
+            .hr {
+                border: none;
+                border-top: 2px solid #F1F5F9;
+                margin: 60px 0;
+            }
+            img {
+                max-width: 100%;
+                border-radius: 8px;
+                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            ${htmlContent}
+        </div>
+    </body>
+    </html>
+    `
+
+    const browser = await puppeteer.launch({
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
+    })
+    const page = await browser.newPage()
+    await page.setContent(fullHtml, { waitUntil: 'networkidle0' })
+    
+    const buffer = await page.pdf({
+        format: 'A4',
+        margin: {
+            top: '25mm',
+            right: '25mm',
+            bottom: '25mm',
+            left: '25mm'
+        },
+        displayHeaderFooter: true,
+        headerTemplate: '<span></span>',
+        footerTemplate: `
+            <div style="font-size: 10px; color: #aaa; width: 100%; text-align: center; font-family: 'Segoe UI', Arial, sans-serif;">
+                Page <span class="pageNumber"></span> of <span class="totalPages"></span>
+            </div>`,
+        printBackground: true
+    })
+
+    await browser.close()
+    return buffer
+}
+
+ipcMain.handle('preview-doc-pdf', async (_event, markdownContent: string) => {
+    try {
+        const buffer = await generatePdfBuffer(markdownContent)
+        return { success: true, data: buffer }
+    } catch (error: any) {
+        console.error('Error during PDF preview generation:', error)
+        return { success: false, error: error.message }
+    }
+})
+
+ipcMain.handle('generate-doc-pdf', async (_event, markdownContent: string, fileName: string) => {
+    try {
+        const { filePath } = await dialog.showSaveDialog({
+            defaultPath: fileName,
+            filters: [{ name: 'PDF Files', extensions: ['pdf'] }]
+        })
+
+        if (!filePath) return { success: false, error: 'Cancelled' }
+
+        const buffer = await generatePdfBuffer(markdownContent)
+        fs.writeFileSync(filePath, buffer)
+
+        return { success: true }
+    } catch (error: any) {
+
+        console.error('Error during PDF conversion:', error)
+        return { success: false, error: error.message }
+    }
 })
 
 // ─── HTTP Request Handler (Postman-like API testing) ─────────────

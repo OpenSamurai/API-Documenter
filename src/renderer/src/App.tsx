@@ -16,13 +16,15 @@ import { DeployProxyDialog } from './components/DeployProxyDialog'
 import { GeneralSettingsDialog } from './components/GeneralSettingsDialog'
 import { EnvironmentsDialog } from './components/EnvironmentsDialog'
 import { UpdaterNotifier } from './components/UpdaterNotifier'
+import { ApiDocumentationPage } from '@/components/ApiDocumentationPage'
 
 export function App() {
     const {
         currentApiId, currentProjectId,
         isOnline, setIsOnline,
         showCreateProject, showCreateFolder, showCreateApi, showTeamConnect,
-        showDatabaseSettings, showRbacSettings, showDeploySettings, showGeneralSettings
+        showDatabaseSettings, showRbacSettings, showDeploySettings, showGeneralSettings,
+        showApiDocumentation
     } = useAppStore()
     const { data: projects } = useProjects()
 
@@ -77,7 +79,9 @@ export function App() {
 
                 {/* Editor area */}
                 <main style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', position: 'relative' }}>
-                    {currentApiId ? (
+                    {showApiDocumentation ? (
+                        <ApiDocumentationPage />
+                    ) : currentApiId ? (
                         <RequestEditor apiId={currentApiId} />
                     ) : (
                         <EmptyState hasProject={hasProject && !!currentProjectId} />
