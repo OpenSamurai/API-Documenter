@@ -47,9 +47,15 @@
 
   /* ─── Timing ─────────────────────────────────────── */
   --ease: 150ms ease;
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
 
   /* ─── Responsive Multipliers ─────────────────────── */
   --font-scale: 1;
+
+  /* ─── Premium Glass ──────────────────────────────── */
+  --glass-bg: rgba(15, 15, 15, 0.7);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-blur: 12px;
 }
 
 /* ─── Responsive Scaling ────────────────────────────── */
@@ -151,52 +157,25 @@ select {
   font-family: inherit;
 }
 
-/* ═══ Animations (subtle, 150ms only) ════════════════════════════ */
+/* ═══ Animations ═════════════════════════════════════════════════ */
 @keyframes fadeIn {
-  from {
-    opacity: 0
-  }
-
-  to {
-    opacity: 1
-  }
+  from { opacity: 0 }
+  to { opacity: 1 }
 }
 
 @keyframes fadeUp {
-  from {
-    opacity: 0;
-    transform: translateY(4px)
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0)
-  }
+  from { opacity: 0; transform: translateY(4px) }
+  to { opacity: 1; transform: translateY(0) }
 }
 
 @keyframes scaleIn {
-  from {
-    opacity: 0;
-    transform: scale(0.97)
-  }
-
-  to {
-    opacity: 1;
-    transform: scale(1)
-  }
+  from { opacity: 0; transform: scale(0.97) }
+  to { opacity: 1; transform: scale(1) }
 }
 
-.fade-in {
-  animation: fadeIn var(--ease)
-}
-
-.fade-up {
-  animation: fadeUp var(--ease)
-}
-
-.scale-in {
-  animation: scaleIn var(--ease)
-}
+.fade-in { animation: fadeIn var(--ease) }
+.fade-up { animation: fadeUp var(--ease) }
+.scale-in { animation: scaleIn var(--ease) }
 
 .grid-bg {
   background-image:
@@ -217,50 +196,69 @@ select {
 }
 
 @keyframes pulse {
-  0% {
-    transform: scale(0.95);
-    opacity: 0.5;
-  }
-
-  50% {
-    transform: scale(1.1);
-    opacity: 1;
-  }
-
-  100% {
-    transform: scale(0.95);
-    opacity: 0.5;
-  }
+  0% { transform: scale(0.95); opacity: 0.5; }
+  50% { transform: scale(1.1); opacity: 1; }
+  100% { transform: scale(0.95); opacity: 0.5; }
 }
 
 /* ═══ Modal animation ═════════════════════════════════════════════ */
 @keyframes modalIn {
-  from {
-    opacity: 0;
-    transform: scale(0.96)
-  }
-
-  to {
-    opacity: 1;
-    transform: scale(1)
-  }
+  from { opacity: 0; transform: scale(0.96) }
+  to { opacity: 1; transform: scale(1) }
 }
 
 @keyframes spin {
-  to {
-    transform: rotate(360deg)
-  }
+  to { transform: rotate(360deg) }
 }
 
 .animate-spin {
   animation: spin 1s linear infinite;
 }
 
+/* ═══ Premium Effects ══════════════════════════════════════════════ */
+.glass {
+  background: var(--glass-bg) !important;
+  backdrop-filter: blur(var(--glass-blur)) !important;
+  -webkit-backdrop-filter: blur(var(--glass-blur)) !important;
+  border: 1px solid var(--glass-border) !important;
+}
+
+.btn-primary-glow {
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-primary-glow::after {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+.btn-primary-glow:hover::after {
+  opacity: 1;
+}
+
+.hover-fade:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: #FFFFFF !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+.section-transition {
+  transition: all 0.3s var(--ease-in-out);
+}
+
 /* ═══════════════════════════════════════════════════════════════════
    PAGE BREAKS & PDF EXPORT
    ═══════════════════════════════════════════════════════════════════ */
 
-/* Ensure the page break node actually breaks the page in PDF/Print */
 .page-break-node {
   page-break-after: always !important;
   break-after: page !important;
@@ -274,7 +272,6 @@ select {
     border: none !important;
     height: 0 !important;
   }
-  
   .page-break-content {
     display: none !important;
   }
@@ -302,6 +299,15 @@ select {
   .toc-endpoints-container { border-left: 2px solid #EEE !important; }
 }
 
+/* Tiptap specific overrides for TOC */
+.ProseMirror .toc-container p,
+.ProseMirror .toc-container div {
+  margin: 0 !important;
+  padding: 0 !important;
+}
+.ProseMirror .toc-container .toc-title-bar h2 {
+    margin: 0 !important;
+}
 
 /* -------------------------------------------------------------------
    API COMPONENT STYLING (METHODS & STATUS CODES)
@@ -488,4 +494,3 @@ select {
   color: #FFFFFF;
   background: #2A2A2A;
 }
-

@@ -4,9 +4,9 @@ import { Link } from '@tiptap/extension-link'
 import { Table, TableRow, TableHeader, TableCell } from '@tiptap/extension-table'
 import { Placeholder } from '@tiptap/extension-placeholder'
 import { Markdown } from 'tiptap-markdown'
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { PageBreak } from './PageBreak'
-import { CustomDiv } from './CustomDiv'
+import { CustomDiv, CustomContentDiv } from './CustomDiv'
 import Heading from '@tiptap/extension-heading'
 import Paragraph from '@tiptap/extension-paragraph'
 
@@ -15,6 +15,11 @@ const StyledHeading = Heading.extend({
     addAttributes() {
         return {
             ...this.parent?.(),
+            id: {
+                default: null,
+                parseHTML: element => element.getAttribute('id'),
+                renderHTML: attributes => attributes.id ? { id: attributes.id } : {},
+            },
             style: {
                 default: null,
                 parseHTML: element => element.getAttribute('style'),
@@ -59,77 +64,7 @@ export function NormalEditor({ content, onChange, folders = [], apis = [] }: Pro
     const [tableMenuOpen, setTableMenuOpen] = useState(false)
     const [, setUpdateCount] = useState(0)
 
-    // Sync TOC logic
-    const syncTOC = useCallback((editor: any) => {
-        if (!editor || (editor as any).isSyncingTOC) return
-
-        let tocContainerPos = -1
-        let tocContainerSize = 0
-        
-        editor.state.doc.descendants((node: any, pos: number) => {
-            if (node.type.name === 'customDiv' && node.attrs.id === 'toc-section') {
-                tocContainerPos = pos
-                tocContainerSize = node.nodeSize
-                return false
-            }
-            if (node.type.name === 'heading' && node.textContent.toLowerCase() === 'table of contents') {
-                tocContainerPos = pos
-                tocContainerSize = node.nodeSize
-                return false
-            }
-            return true
-        })
-
-        if (tocContainerPos !== -1) {
-            const headings: { level: number, text: string, id: string }[] = []
-            editor.state.doc.descendants((node: any) => {
-                if (node.type.name === 'heading' && (node.attrs.level === 2 || node.attrs.level === 3)) {
-                    const text = node.textContent
-                    if (text.toLowerCase() === 'table of contents') return
-                    const id = node.attrs.id || text.toLowerCase().replace(/[^a-z0-9]+/g, '-')
-                    const cleanText = text.replace(/^(Folder:|Endpoint:)\s*/i, '').trim()
-                    headings.push({ level: node.attrs.level, text: cleanText, id })
-                }
-            })
-
-            let folderCount = 0
-            let tocHtml = `<div class="toc-title-bar"><h2>Table of Contents</h2></div><div class="toc-list">`
-            let currentFolderGroupOpen = false
-            
-            for (const h of headings) {
-                if (h.level === 2) {
-                    if (currentFolderGroupOpen) tocHtml += `</div></div>`
-                    folderCount++
-                    tocHtml += `
-                        <div class="toc-folder-group">
-                            <div class="toc-folder-item">
-                                <span class="toc-folder-number">${folderCount.toString().padStart(2, '0')}</span>
-                                <a href="#${h.id}" class="toc-folder-link">${h.text}</a>
-                            </div>
-                            <div class="toc-endpoints-container">`
-                    currentFolderGroupOpen = true
-                } else {
-                    tocHtml += `
-                        <div class="toc-endpoint-item">
-                            <span class="toc-endpoint-bullet">•</span>
-                            <a href="#${h.id}" class="toc-endpoint-link">${h.text}</a>
-                        </div>`
-                }
-            }
-            if (currentFolderGroupOpen) tocHtml += `</div></div>`
-            tocHtml += `</div>`
-
-            (editor as any).isSyncingTOC = true
-            const { from, to } = editor.state.selection
-            editor.chain()
-                .insertContentAt({ from: tocContainerPos, to: tocContainerPos + tocContainerSize }, 
-                    `<div id="toc-section" class="toc-container">${tocHtml}</div>`)
-                .setTextSelection({ from, to })
-                .setMeta('addToHistory', false)
-                .run()
-            setTimeout(() => { (editor as any).isSyncingTOC = false }, 50)
-        }
-    }, [])
+    const lastMarkdownRef = useRef<string>(content)
 
     const editor = useEditor({
         extensions: [
@@ -141,16 +76,13 @@ export function NormalEditor({ content, onChange, folders = [], apis = [] }: Pro
             StyledHeading,
             StyledParagraph,
             CustomDiv,
+            CustomContentDiv,
             Markdown.configure({
                 html: true,
                 tightLists: true,
                 bulletListMarker: '-',
                 linkify: true,
                 breaks: true,
-            }),
-            Link.configure({
-                openOnClick: false,
-                HTMLAttributes: { class: 'editor-link' },
             }),
             Table.configure({ resizable: true }),
             TableRow,
@@ -160,51 +92,80 @@ export function NormalEditor({ content, onChange, folders = [], apis = [] }: Pro
             PageBreak,
         ],
         content: content,
-        onCreate: ({ editor }) => {
-            syncTOC(editor)
-        },
         onUpdate: ({ editor }) => {
             const markdown = (editor.storage as any).markdown.getMarkdown()
+            lastMarkdownRef.current = markdown
             onChange(markdown)
-            
-            const timeoutId = (editor as any).tocTimeoutId
-            if (timeoutId) clearTimeout(timeoutId)
-            ;(editor as any).tocTimeoutId = setTimeout(() => {
-                syncTOC(editor)
-            }, 500)
         },
         onTransaction: () => {
-            setUpdateCount(prev => prev + 1)
+            setTimeout(() => {
+                setUpdateCount(prev => prev + 1)
+            }, 0)
         },
     }, [onChange])
 
-    // Sync Headings with External Data (Sidebar edits)
+    // Track previous folder/api names to detect EXTERNAL changes only
+    const prevFolderNamesRef = useRef<Record<string, string>>({})
+    const prevApiNamesRef = useRef<Record<string, string>>({})
+
+    // Sync Headings with External Data (ONLY when database changes, NOT user typing)
     useEffect(() => {
-        if (!editor || (editor as any).isSyncingTOC) return
+        if (!editor) return
+
+        // Build current name maps from database
+        const currentFolderNames: Record<string, string> = {}
+        folders.forEach(f => { currentFolderNames[f.id] = f.name })
+        const currentApiNames: Record<string, string> = {}
+        apis.forEach(a => { currentApiNames[a.id] = a.name })
+
+        // Determine which folders/apis actually changed in the DATABASE
+        const changedFolderIds = new Set<string>()
+        const changedApiIds = new Set<string>()
+
+        for (const [id, name] of Object.entries(currentFolderNames)) {
+            if (prevFolderNamesRef.current[id] !== undefined && prevFolderNamesRef.current[id] !== name) {
+                changedFolderIds.add(id)
+            }
+        }
+        for (const [id, name] of Object.entries(currentApiNames)) {
+            if (prevApiNamesRef.current[id] !== undefined && prevApiNamesRef.current[id] !== name) {
+                changedApiIds.add(id)
+            }
+        }
+
+        // Update refs for next comparison
+        prevFolderNamesRef.current = currentFolderNames
+        prevApiNamesRef.current = currentApiNames
+
+        // If nothing changed externally, skip entirely
+        if (changedFolderIds.size === 0 && changedApiIds.size === 0) return
 
         let changed = false
-        const commands = editor.chain()
+        const { tr } = editor.state
+        const { selection } = editor.state
 
         editor.state.doc.descendants((node: any, pos: number) => {
             if (node.type.name === 'heading') {
                 const id = node.attrs.id || ''
                 if (node.attrs.level === 2 && id.startsWith('folder-')) {
                     const folderId = id.replace('folder-', '')
-                    const folder = folders.find(f => f.id === folderId)
-                    const expectedText = `Folder: ${folder?.name || ''}`
-                    if (folder && node.textContent !== expectedText) {
-                        commands.insertContentAt({ from: pos, to: pos + node.nodeSize }, 
-                            `<h2 id="${id}">${expectedText}</h2>`)
-                        changed = true
+                    if (changedFolderIds.has(folderId)) {
+                        const folder = folders.find(f => f.id === folderId)
+                        const expectedText = `Folder: ${folder?.name || ''}`
+                        if (folder && node.textContent !== expectedText) {
+                            tr.insertText(expectedText, pos + 1, pos + node.nodeSize - 1)
+                            changed = true
+                        }
                     }
                 } else if (node.attrs.level === 3 && id.startsWith('api-')) {
                     const apiId = id.replace('api-', '')
-                    const api = apis.find(a => a.id === apiId)
-                    const expectedText = `Endpoint: ${api?.name || ''}`
-                    if (api && node.textContent !== expectedText) {
-                        commands.insertContentAt({ from: pos, to: pos + node.nodeSize }, 
-                            `<h3 id="${id}">${expectedText}</h3>`)
-                        changed = true
+                    if (changedApiIds.has(apiId)) {
+                        const api = apis.find(a => a.id === apiId)
+                        const expectedText = `Endpoint: ${api?.name || ''}`
+                        if (api && node.textContent !== expectedText) {
+                            tr.insertText(expectedText, pos + 1, pos + node.nodeSize - 1)
+                            changed = true
+                        }
                     }
                 }
             }
@@ -212,20 +173,26 @@ export function NormalEditor({ content, onChange, folders = [], apis = [] }: Pro
         })
 
         if (changed) {
-            (editor as any).isSyncingTOC = true
-            const { from, to } = editor.state.selection
-            commands.setTextSelection({ from, to }).setMeta('addToHistory', false).run()
-            setTimeout(() => { 
-                (editor as any).isSyncingTOC = false
-                syncTOC(editor)
-            }, 50)
+            const mappedSelection = selection.map(tr.doc, tr.mapping)
+            tr.setSelection(mappedSelection)
+            tr.setMeta('addToHistory', false)
+            editor.view.dispatch(tr)
         }
-    }, [folders, apis, editor, syncTOC])
+    }, [folders, apis, editor])
 
     // Sync content if it changes externally (important for the toggling)
     useEffect(() => {
-        if (!editor || content === (editor.storage as any).markdown.getMarkdown()) return
-        editor.commands.setContent(content)
+        // Compare with lastMarkdownRef to avoid ping-pong updates
+        const currentMarkdown = (editor?.storage as any)?.markdown?.getMarkdown()
+        if (!editor || content === lastMarkdownRef.current || content === currentMarkdown) return
+
+        lastMarkdownRef.current = content // Sync ref with incoming external change
+
+        setTimeout(() => {
+            if (editor && !editor.isDestroyed) {
+                editor.commands.setContent(content)
+            }
+        }, 0)
     }, [content, editor])
 
     const addLink = useCallback(() => {
@@ -270,23 +237,23 @@ export function NormalEditor({ content, onChange, folders = [], apis = [] }: Pro
     return (
         <div className="normal-editor-container" style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#0F0F0F' }}>
             {/* Toolbar */}
-            <div className="editor-toolbar" style={{ 
-                display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 12px', 
+            <div className="editor-toolbar" style={{
+                display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 12px',
                 background: '#151515', borderBottom: '1px solid #1F1F1F', flexWrap: 'wrap'
             }}>
                 {/* Heading Dropdown */}
                 <div style={{ position: 'relative' }}>
-                    <button 
+                    <button
                         onClick={() => setHeadingMenuOpen(!headingMenuOpen)}
                         className="toolbar-btn dropdown-btn"
                         style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: '120px' }}
                     >
                         <span>{currentHeading()}</span>
-                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M6 9l6 6 6-6"/></svg>
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M6 9l6 6 6-6" /></svg>
                     </button>
                     {headingMenuOpen && (
-                        <div style={{ 
-                            position: 'absolute', top: '100%', left: 0, zIndex: 50, background: '#1A1A1A', 
+                        <div style={{
+                            position: 'absolute', top: '100%', left: 0, zIndex: 50, background: '#1A1A1A',
                             border: '1px solid #2A2A2A', borderRadius: '4px', marginTop: '4px', width: '200px',
                             boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.4)'
                         }}>
@@ -294,7 +261,7 @@ export function NormalEditor({ content, onChange, folders = [], apis = [] }: Pro
                                 <button
                                     key={level}
                                     onClick={() => toggleHeading(level)}
-                                    style={{ 
+                                    style={{
                                         width: '100%', textAlign: 'left', padding: '8px 12px', background: 'transparent',
                                         border: 'none', color: '#D1D5DB', fontSize: '13px', cursor: 'pointer',
                                     }}
@@ -310,69 +277,69 @@ export function NormalEditor({ content, onChange, folders = [], apis = [] }: Pro
                 <div className="toolbar-divider" />
 
                 {/* Basic Formatting */}
-                <ToolbarButton 
-                    onClick={() => editor.chain().focus().toggleBold().run()} 
+                <ToolbarButton
+                    onClick={() => editor.chain().focus().toggleBold().run()}
                     active={editor.isActive('bold')}
                     title="Bold"
-                    icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"/><path d="M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"/></svg>}
+                    icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z" /><path d="M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z" /></svg>}
                 />
-                <ToolbarButton 
-                    onClick={() => editor.chain().focus().toggleItalic().run()} 
+                <ToolbarButton
+                    onClick={() => editor.chain().focus().toggleItalic().run()}
                     active={editor.isActive('italic')}
                     title="Italic"
-                    icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="19" y1="4" x2="10" y2="4"/><line x1="14" y1="20" x2="5" y2="20"/><line x1="15" y1="4" x2="9" y2="20"/></svg>}
+                    icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="19" y1="4" x2="10" y2="4" /><line x1="14" y1="20" x2="5" y2="20" /><line x1="15" y1="4" x2="9" y2="20" /></svg>}
                 />
-                <ToolbarButton 
-                    onClick={() => editor.chain().focus().toggleStrike().run()} 
+                <ToolbarButton
+                    onClick={() => editor.chain().focus().toggleStrike().run()}
                     active={editor.isActive('strike')}
                     title="Strikethrough"
-                    icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M16 4h3a2 2 0 0 1 0 4h-3m-10 0h3a2 2 0 0 0 0-4h-3m10 8H9m7 4h3a2 2 0 0 1 0 4h-3m-10 0h3a2 2 0 0 1 0-4h-3"/></svg>}
+                    icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M16 4h3a2 2 0 0 1 0 4h-3m-10 0h3a2 2 0 0 0 0-4h-3m10 8H9m7 4h3a2 2 0 0 1 0 4h-3m-10 0h3a2 2 0 0 1 0-4h-3" /></svg>}
                 />
 
                 <div className="toolbar-divider" />
 
-                <ToolbarButton 
-                    onClick={() => editor.chain().focus().toggleBulletList().run()} 
+                <ToolbarButton
+                    onClick={() => editor.chain().focus().toggleBulletList().run()}
                     active={editor.isActive('bulletList')}
                     title="Bullet List"
-                    icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>}
+                    icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" /></svg>}
                 />
-                <ToolbarButton 
-                    onClick={() => editor.chain().focus().toggleOrderedList().run()} 
+                <ToolbarButton
+                    onClick={() => editor.chain().focus().toggleOrderedList().run()}
                     active={editor.isActive('orderedList')}
                     title="Ordered List"
-                    icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="10" y1="6" x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="18" x2="21" y2="18"/><path d="M4 6h1v4"/><path d="M4 10h2"/><path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1"/></svg>}
+                    icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="10" y1="6" x2="21" y2="6" /><line x1="10" y1="12" x2="21" y2="12" /><line x1="10" y1="18" x2="21" y2="18" /><path d="M4 6h1v4" /><path d="M4 10h2" /><path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1" /></svg>}
                 />
 
                 <div className="toolbar-divider" />
 
-                <ToolbarButton 
-                    onClick={addLink} 
+                <ToolbarButton
+                    onClick={addLink}
                     active={editor.isActive('link')}
                     title="Insert Link"
-                    icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>}
+                    icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" /><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" /></svg>}
                 />
                 <div style={{ position: 'relative', display: 'flex', gap: '4px' }}>
-                    <ToolbarButton 
-                        onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()} 
+                    <ToolbarButton
+                        onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
                         active={editor.isActive('table')}
                         title="Insert Table"
-                        icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>}
+                        icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="3" y1="9" x2="21" y2="9" /><line x1="3" y1="15" x2="21" y2="15" /><line x1="9" y1="3" x2="9" y2="21" /><line x1="15" y1="3" x2="15" y2="21" /></svg>}
                     />
                     {editor.isActive('table') && (
                         <div style={{ position: 'relative' }}>
-                            <button 
+                            <button
                                 onClick={() => setTableMenuOpen(!tableMenuOpen)}
                                 className={`toolbar-btn ${tableMenuOpen ? 'is-active' : ''}`}
                                 title="Table Actions"
                                 style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 8px' }}
                             >
                                 <span style={{ fontSize: '11px', fontWeight: 700 }}>TABLE</span>
-                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M6 9l6 6 6-6"/></svg>
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M6 9l6 6 6-6" /></svg>
                             </button>
                             {tableMenuOpen && (
-                                <div style={{ 
-                                    position: 'absolute', top: '100%', left: 0, zIndex: 50, background: '#1A1A1A', 
+                                <div style={{
+                                    position: 'absolute', top: '100%', left: 0, zIndex: 50, background: '#1A1A1A',
                                     border: '1px solid #2A2A2A', borderRadius: '4px', marginTop: '4px', width: '160px',
                                     boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.4)'
                                 }}>
@@ -383,7 +350,7 @@ export function NormalEditor({ content, onChange, folders = [], apis = [] }: Pro
                                                 action.action()
                                                 setTableMenuOpen(false)
                                             }}
-                                            style={{ 
+                                            style={{
                                                 width: '100%', textAlign: 'left', padding: '8px 12px', background: 'transparent',
                                                 border: 'none', color: action.danger ? '#F87171' : '#D1D5DB', fontSize: '12px', cursor: 'pointer',
                                                 fontWeight: action.danger ? 700 : 400
@@ -398,32 +365,38 @@ export function NormalEditor({ content, onChange, folders = [], apis = [] }: Pro
                         </div>
                     )}
                 </div>
-                <ToolbarButton 
-                    onClick={() => editor.chain().focus().toggleBlockquote().run()} 
+                <ToolbarButton
+                    onClick={() => editor.chain().focus().toggleBlockquote().run()}
                     active={editor.isActive('blockquote')}
                     title="Blockquote"
-                    icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>}
+                    icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>}
                 />
 
                 <div className="toolbar-divider" />
 
-                <ToolbarButton 
-                    onClick={() => editor.chain().focus().toggleCode().run()} 
+                <ToolbarButton
+                    onClick={() => editor.chain().focus().toggleCode().run()}
                     active={editor.isActive('code')}
                     title="Inline Code"
-                    icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>}
+                    icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="16 18 22 12 16 6" /><polyline points="8 6 2 12 8 18" /></svg>}
                 />
-                <ToolbarButton 
-                    onClick={() => editor.chain().focus().toggleCodeBlock().run()} 
+                <ToolbarButton
+                    onClick={() => editor.chain().focus().toggleCodeBlock().run()}
                     active={editor.isActive('codeBlock')}
                     title="Code Block"
-                    icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M7 8l3 3-3 3"/><path d="M12 14h5"/></svg>}
+                    icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="2" y="4" width="20" height="16" rx="2" /><path d="M7 8l3 3-3 3" /><path d="M12 14h5" /></svg>}
                 />
-                <ToolbarButton 
-                    onClick={() => (editor as any).commands.setPageBreak()} 
+                <ToolbarButton
+                    onClick={() => (editor as any).commands.insertSmartTOC()}
+                    active={editor.isActive('smartToc')}
+                    title="Insert Smart TOC"
+                    icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" /><circle cx="3" cy="6" r="1" /><circle cx="3" cy="12" r="1" /><circle cx="3" cy="18" r="1" /></svg>}
+                />
+                <ToolbarButton
+                    onClick={() => (editor as any).commands.setPageBreak()}
                     active={false}
                     title="Insert Page Break"
-                    icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="2" y1="12" x2="22" y2="12" strokeDasharray="4 4"/><path d="M2 18h20M2 6h20"/></svg>}
+                    icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="2" y1="12" x2="22" y2="12" strokeDasharray="4 4" /><path d="M2 18h20M2 6h20" /></svg>}
                 />
             </div>
 
@@ -582,7 +555,7 @@ export function NormalEditor({ content, onChange, folders = [], apis = [] }: Pro
 
 function ToolbarButton({ onClick, active, icon, title }: { onClick: () => void, active: boolean, icon: React.ReactNode, title: string }) {
     return (
-        <button 
+        <button
             type="button"
             onClick={onClick}
             className={`toolbar-btn ${active ? 'is-active' : ''}`}
