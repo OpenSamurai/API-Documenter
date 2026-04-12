@@ -8,7 +8,6 @@ import pg from 'pg'
 import { spawn } from 'child_process'
 import { autoUpdater } from 'electron-updater'
 import MarkdownIt from 'markdown-it'
-import puppeteer from 'puppeteer'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -145,8 +144,8 @@ ipcMain.handle("export-pdf", async (_, html, fileName) => {
     win.close()
 })
 
-// Helper for PDF generation
-async function generatePdfBuffer(markdownContent: string) {
+// Helper for PDF generation — uses Electron's built-in Chromium (no external Chrome needed)
+async function generatePdfBuffer(markdownContent: string): Promise<Buffer> {
     const md = new MarkdownIt({
         html: true,
         linkify: true,
@@ -162,7 +161,7 @@ async function generatePdfBuffer(markdownContent: string) {
         <style>
             @page {
                 size: A4;
-                margin: 20mm;
+                margin: 25mm;
             }
             body {
                 font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -213,12 +212,11 @@ async function generatePdfBuffer(markdownContent: string) {
             h4 {
                 font-size: 1.1rem;
                 font-weight: 700;
-                color: #374151;
+                color: #6B7280;
                 margin-top: 28px;
                 margin-bottom: 12px;
                 text-transform: uppercase;
                 letter-spacing: 0.05em;
-                color: #6B7280;
             }
             p {
                 margin: 16px 0;
@@ -258,126 +256,34 @@ async function generatePdfBuffer(markdownContent: string) {
             .status-5xx { background: #FEE2E2; color: #991B1B; }
 
             /* --- Table of Contents (Premium Modern) --- */
-            .toc-container { 
-                margin: 80px 0;
-            }
-            .toc-title-bar { 
-                border-bottom: 3px solid #3B82F6; 
-                margin-bottom: 48px; 
-                padding-bottom: 24px; 
-            }
-            .toc-title-bar h2 { 
-                margin: 0 !important; 
-                font-size: 3rem !important; 
-                border-bottom: none !important;
-                color: #111827 !important;
-            }
+            .toc-container { margin: 80px 0; }
+            .toc-title-bar { border-bottom: 3px solid #3B82F6; margin-bottom: 48px; padding-bottom: 24px; }
+            .toc-title-bar h2 { margin: 0 !important; font-size: 3rem !important; border-bottom: none !important; color: #111827 !important; }
             .toc-list { display: flex; flex-direction: column; gap: 32px; }
             .toc-folder-group { position: relative; }
             .toc-folder-item { display: flex; align-items: center; gap: 16px; margin-bottom: 12px; }
-            .toc-folder-number { 
-                background: #F3F4F6; 
-                color: #3B82F6; 
-                font-weight: 800; 
-                padding: 2px 8px; 
-                border-radius: 6px; 
-                font-size: 0.9em;
-                min-width: 32px;
-                text-align: center;
-                font-family: monospace;
-            }
-            .toc-folder-link { 
-                color: #111827; 
-                text-decoration: none; 
-                font-size: 1.4rem; 
-                font-weight: 800; 
-            }
-            .toc-endpoints-container { 
-                border-left: 2px solid #F3F4F6; 
-                margin-left: 15px; 
-                padding-left: 32px; 
-                display: flex; 
-                flex-direction: column; 
-                gap: 12px; 
-            }
+            .toc-folder-number { background: #F3F4F6; color: #3B82F6; font-weight: 800; padding: 2px 8px; border-radius: 6px; font-size: 0.9em; min-width: 32px; text-align: center; font-family: monospace; }
+            .toc-folder-link { color: #111827; text-decoration: none; font-size: 1.4rem; font-weight: 800; }
+            .toc-endpoints-container { border-left: 2px solid #F3F4F6; margin-left: 15px; padding-left: 32px; display: flex; flex-direction: column; gap: 12px; }
             .toc-endpoint-item { display: flex; align-items: center; gap: 12px; position: relative; }
-            .toc-endpoint-item::before {
-                content: "";
-                position: absolute;
-                left: -33px;
-                top: 50%;
-                width: 12px;
-                height: 2px;
-                background: #F3F4F6;
-            }
+            .toc-endpoint-item::before { content: ""; position: absolute; left: -33px; top: 50%; width: 12px; height: 2px; background: #F3F4F6; }
             .toc-endpoint-bullet { display: none; }
             .toc-endpoint-link { color: #4B5563; text-decoration: none; font-size: 1.1rem; font-weight: 500; }
 
             /* --- Code & Pre --- */
-            pre {
-                background-color: #f8fafc;
-                color: #1e293b;
-                padding: 24px;
-                border-radius: 12px;
-                font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
-                font-size: 0.9rem;
-                line-height: 1.7;
-                overflow-x: auto;
-                margin: 24px 0;
-                border: 1px solid #e2e8f0;
-            }
-            code {
-                font-family: inherit;
-                background-color: #f1f5f9;
-                color: #475569;
-                padding: 0.2rem 0.4rem;
-                border-radius: 4px;
-                font-size: 0.9em;
-            }
-            pre code {
-                background-color: transparent;
-                color: inherit;
-                padding: 0;
-            }
+            pre { background-color: #f8fafc; color: #1e293b; padding: 24px; border-radius: 12px; font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; font-size: 0.9rem; line-height: 1.7; overflow-x: auto; margin: 24px 0; border: 1px solid #e2e8f0; }
+            code { font-family: inherit; background-color: #f1f5f9; color: #475569; padding: 0.2rem 0.4rem; border-radius: 4px; font-size: 0.9em; }
+            pre code { background-color: transparent; color: inherit; padding: 0; }
 
             /* --- Tables --- */
-            table {
-                width: 100%;
-                border-collapse: collapse;
-                margin: 32px 0;
-            }
-            table th, table td {
-                padding: 14px 16px;
-                border: 1px solid #E5E7EB;
-                text-align: left;
-                vertical-align: top;
-            }
-            table th {
-                background-color: #F9FAFB;
-                font-weight: 700;
-                color: #374151;
-                text-transform: uppercase;
-                font-size: 0.75rem;
-                letter-spacing: 0.05em;
-            }
+            table { width: 100%; border-collapse: collapse; margin: 32px 0; }
+            table th, table td { padding: 14px 16px; border: 1px solid #E5E7EB; text-align: left; vertical-align: top; }
+            table th { background-color: #F9FAFB; font-weight: 700; color: #374151; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.05em; }
 
             /* --- Helpers --- */
-            .page-break {
-                page-break-after: always;
-            }
-            blockquote {
-                border-left: 4px solid #3B82F6;
-                padding: 8px 16px;
-                margin: 24px 0;
-                background: #F9FAFB;
-                color: #4B5563;
-                font-style: italic;
-                border-radius: 0 8px 8px 0;
-            }
-            img {
-                max-width: 100%;
-                border-radius: 12px;
-            }
+            .page-break { page-break-after: always; }
+            blockquote { border-left: 4px solid #3B82F6; padding: 8px 16px; margin: 24px 0; background: #F9FAFB; color: #4B5563; font-style: italic; border-radius: 0 8px 8px 0; }
+            img { max-width: 100%; border-radius: 12px; }
         </style>
     </head>
     <body>
@@ -388,32 +294,33 @@ async function generatePdfBuffer(markdownContent: string) {
     </html>
     `
 
-    const browser = await puppeteer.launch({
-        headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
-    })
-    const page = await browser.newPage()
-    await page.setContent(fullHtml, { waitUntil: 'networkidle0' })
-    
-    const buffer = await page.pdf({
-        format: 'A4',
-        margin: {
-            top: '25mm',
-            right: '25mm',
-            bottom: '25mm',
-            left: '25mm'
-        },
-        displayHeaderFooter: true,
-        headerTemplate: '<span></span>',
-        footerTemplate: `
-            <div style="font-size: 10px; color: #aaa; width: 100%; text-align: center; font-family: 'Segoe UI', Arial, sans-serif;">
-                Page <span class="pageNumber"></span> of <span class="totalPages"></span>
-            </div>`,
-        printBackground: true
+    // Write HTML to a temp file so BrowserWindow can load it as a local file
+    const tempHtmlPath = path.join(os.tmpdir(), `api-doc-pdf-${Date.now()}.html`)
+    fs.writeFileSync(tempHtmlPath, fullHtml, 'utf-8')
+
+    const win = new BrowserWindow({
+        show: false,
+        width: 1200,
+        height: 1600,
+        webPreferences: { javascript: false }
     })
 
-    await browser.close()
-    return buffer
+    try {
+        await win.loadFile(tempHtmlPath)
+        // Wait for fonts/images to settle
+        await new Promise(resolve => setTimeout(resolve, 500))
+
+        const pdfBuffer = await win.webContents.printToPDF({
+            printBackground: true,
+            preferCSSPageSize: true,
+            margins: { marginType: 'none' }
+        })
+
+        return Buffer.from(pdfBuffer)
+    } finally {
+        win.close()
+        try { fs.unlinkSync(tempHtmlPath) } catch (_) { /* ignore cleanup errors */ }
+    }
 }
 
 ipcMain.handle('preview-doc-pdf', async (_event, markdownContent: string) => {
