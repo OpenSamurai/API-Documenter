@@ -252,25 +252,31 @@ export function NormalEditor({ content, onChange, folders = [], apis = [] }: Pro
                         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M6 9l6 6 6-6" /></svg>
                     </button>
                     {headingMenuOpen && (
-                        <div style={{
-                            position: 'absolute', top: '100%', left: 0, zIndex: 50, background: '#1A1A1A',
-                            border: '1px solid #2A2A2A', borderRadius: '4px', marginTop: '4px', width: '200px',
-                            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.4)'
-                        }}>
-                            {[0, 1, 2, 3, 4, 5, 6].map(level => (
-                                <button
-                                    key={level}
-                                    onClick={() => toggleHeading(level)}
-                                    style={{
-                                        width: '100%', textAlign: 'left', padding: '8px 12px', background: 'transparent',
-                                        border: 'none', color: '#D1D5DB', fontSize: '13px', cursor: 'pointer',
-                                    }}
-                                    className="menu-item-hover"
-                                >
-                                    {level === 0 ? 'Normal text' : `Heading ${level}`}
-                                </button>
-                            ))}
-                        </div>
+                        <>
+                            <div 
+                                onClick={() => setHeadingMenuOpen(false)}
+                                style={{ position: 'fixed', inset: 0, zIndex: 190, background: 'transparent' }}
+                            />
+                            <div style={{
+                                position: 'absolute', top: '100%', left: 0, zIndex: 200, background: '#1A1A1A',
+                                border: '1px solid #2A2A2A', borderRadius: '4px', marginTop: '4px', width: '200px',
+                                boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.4)'
+                            }}>
+                                {[0, 1, 2, 3, 4, 5, 6].map(level => (
+                                    <button
+                                        key={level}
+                                        onClick={() => toggleHeading(level)}
+                                        style={{
+                                            width: '100%', textAlign: 'left', padding: '8px 12px', background: 'transparent',
+                                            border: 'none', color: '#D1D5DB', fontSize: '13px', cursor: 'pointer',
+                                        }}
+                                        className="menu-item-hover"
+                                    >
+                                        {level === 0 ? 'Normal text' : `Heading ${level}`}
+                                    </button>
+                                ))}
+                            </div>
+                        </>
                     )}
                 </div>
 
@@ -338,29 +344,35 @@ export function NormalEditor({ content, onChange, folders = [], apis = [] }: Pro
                                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M6 9l6 6 6-6" /></svg>
                             </button>
                             {tableMenuOpen && (
-                                <div style={{
-                                    position: 'absolute', top: '100%', left: 0, zIndex: 50, background: '#1A1A1A',
-                                    border: '1px solid #2A2A2A', borderRadius: '4px', marginTop: '4px', width: '160px',
-                                    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.4)'
-                                }}>
-                                    {tableActions.map((action, i) => (
-                                        <button
-                                            key={i}
-                                            onClick={() => {
-                                                action.action()
-                                                setTableMenuOpen(false)
-                                            }}
-                                            style={{
-                                                width: '100%', textAlign: 'left', padding: '8px 12px', background: 'transparent',
-                                                border: 'none', color: action.danger ? '#F87171' : '#D1D5DB', fontSize: '12px', cursor: 'pointer',
-                                                fontWeight: action.danger ? 700 : 400
-                                            }}
-                                            className="menu-item-hover"
-                                        >
-                                            {action.label}
-                                        </button>
-                                    ))}
-                                </div>
+                                <>
+                                    <div 
+                                        onClick={() => setTableMenuOpen(false)}
+                                        style={{ position: 'fixed', inset: 0, zIndex: 190, background: 'transparent' }}
+                                    />
+                                    <div style={{
+                                        position: 'absolute', top: '100%', left: 0, zIndex: 200, background: '#1A1A1A',
+                                        border: '1px solid #2A2A2A', borderRadius: '4px', marginTop: '4px', width: '160px',
+                                        boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.4)'
+                                    }}>
+                                        {tableActions.map((action, i) => (
+                                            <button
+                                                key={i}
+                                                onClick={() => {
+                                                    action.action()
+                                                    setTableMenuOpen(false)
+                                                }}
+                                                style={{
+                                                    width: '100%', textAlign: 'left', padding: '8px 12px', background: 'transparent',
+                                                    border: 'none', color: action.danger ? '#F87171' : '#D1D5DB', fontSize: '12px', cursor: 'pointer',
+                                                    fontWeight: action.danger ? 700 : 400
+                                                }}
+                                                className="menu-item-hover"
+                                            >
+                                                {action.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </>
                             )}
                         </div>
                     )}
@@ -385,12 +397,6 @@ export function NormalEditor({ content, onChange, folders = [], apis = [] }: Pro
                     active={editor.isActive('codeBlock')}
                     title="Code Block"
                     icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="2" y="4" width="20" height="16" rx="2" /><path d="M7 8l3 3-3 3" /><path d="M12 14h5" /></svg>}
-                />
-                <ToolbarButton
-                    onClick={() => (editor as any).commands.insertSmartTOC()}
-                    active={editor.isActive('smartToc')}
-                    title="Insert Smart TOC"
-                    icon={<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" /><circle cx="3" cy="6" r="1" /><circle cx="3" cy="12" r="1" /><circle cx="3" cy="18" r="1" /></svg>}
                 />
                 <ToolbarButton
                     onClick={() => (editor as any).commands.setPageBreak()}

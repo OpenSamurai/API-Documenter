@@ -248,6 +248,20 @@ export function useImportProject() {
 
                 // Save APIs
                 for (const a of apis) {
+                    console.log('[Import] Saving API:', a.id, a.name, {
+                        url_params: a.url_params,
+                        headers: a.headers,
+                        request_body: a.request_body,
+                        response_examples: a.response_examples
+                    })
+                    const safeParse = (val: any, fallback: any = null) => {
+                        if (val === null || val === undefined || val === '') return fallback
+                        if (typeof val !== 'string') return val
+                        try { return JSON.parse(val) } catch (e) {
+                            console.error('[Import] JSON.parse failed for API', a.id, a.name, '| value:', val, '| error:', e)
+                            return fallback
+                        }
+                    }
                     await db.apiCollections.add({
                         id: a.id,
                         projectId: projectId,
@@ -256,11 +270,11 @@ export function useImportProject() {
                         description: a.description,
                         method: a.method,
                         path: a.path,
-                        urlParams: typeof a.url_params === 'string' ? JSON.parse(a.url_params) : a.url_params,
-                        headers: typeof a.headers === 'string' ? JSON.parse(a.headers) : a.headers,
+                        urlParams: safeParse(a.url_params, []),
+                        headers: safeParse(a.headers, []),
                         bodyType: a.body_type,
-                        requestBody: typeof a.request_body === 'string' ? JSON.parse(a.request_body) : a.request_body,
-                        responseExamples: typeof a.response_examples === 'string' ? JSON.parse(a.response_examples) : a.response_examples,
+                        requestBody: safeParse(a.request_body, ''),
+                        responseExamples: safeParse(a.response_examples, []),
                         version: a.version || 1,
                         lastSync: Date.now(),
                         syncStatus: 'synced',

@@ -266,7 +266,9 @@ export function Sidebar() {
                                         <ActionBtn icon="settings" label="Project Settings" onClick={() => setShowGeneralSettings(true)} />
                                     )}
 
-                                    <ActionBtn icon="document" label="Generate API Docs" onClick={() => setShowApiDocumentation(true)} />
+                                    {!isTeamWorkspace && (
+                                        <ActionBtn icon="document" label="Generate API Docs" onClick={() => setShowApiDocumentation(true)} />
+                                    )}
                                 </div>
                             )}
                         </div>

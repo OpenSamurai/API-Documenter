@@ -56,6 +56,7 @@ export function CreateProjectDialog() {
                 setRemoteProjects([])
             }
         } catch (err) {
+            console.error('[ImportProject] fetchRemoteProjects failed:', err)
             setImportError('Failed to fetch projects. Check your database URL.')
         } finally {
             setIsLoadingProjects(false)
@@ -79,6 +80,7 @@ export function CreateProjectDialog() {
                 })
                 selectProject(p.id); close()
             } catch (err: any) {
+                console.error('[ImportProject] import failed:', err)
                 setImportError(err.message || 'Import failed')
             }
         }

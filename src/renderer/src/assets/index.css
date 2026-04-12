@@ -277,26 +277,124 @@ select {
   }
 }
 
-/* TABLE OF CONTENTS STYLES (PDF SUPPORT) */
-.toc-container { margin: 64px auto !important; max-width: 800px; display: block !important; }
-.toc-title-bar { background: rgba(255,255,255,0.03) !important; padding: 24px 32px !important; border-radius: 16px !important; margin-bottom: 40px !important; border: 1px solid rgba(255,255,255,0.08) !important; box-shadow: 0 4px 20px rgba(0,0,0,0.2) !important; }
-.toc-title-bar h2 { margin: 0 !important; font-size: 2.2em !important; font-weight: 900 !important; color: #FFFFFF !important; line-height: 1 !important; border: none !important; }
-.toc-list { display: flex !important; flex-direction: column !important; gap: 12px !important; }
-.toc-folder-group { margin-top: 24px !important; }
-.toc-folder-item { display: flex !important; align-items: center !important; gap: 12px !important; padding: 8px 0 !important; border-bottom: 1px solid rgba(255,255,255,0.03) !important; }
-.toc-folder-number { font-family: monospace; font-weight: 900; color: #4B5563; font-size: 0.9em; min-width: 24px; opacity: 0.7; }
-.toc-folder-link { color: #818CF8 !important; text-decoration: none !important; font-size: 1.15em !important; font-weight: 800 !important; transition: all 0.2s ease !important; }
-.toc-endpoints-container { margin-left: 36px !important; border-left: 2px solid rgba(255, 255, 255, 0.03) !important; padding-left: 24px !important; margin-top: 8px !important; display: flex !important; flex-direction: column !important; gap: 8px !important; }
-.toc-endpoint-item { display: flex !important; align-items: center !important; gap: 10px !important; }
-.toc-endpoint-bullet { color: #4B5563; opacity: 0.5; }
-.toc-endpoint-link { color: #94A3B8 !important; text-decoration: none !important; font-size: 0.95em !important; }
+/* TABLE OF CONTENTS STYLES (MODERN PREMIUM DESIGN) */
+.toc-container { 
+  margin: 80px auto !important; 
+  padding: 0 40px !important;
+  max-width: 850px; 
+  display: block !important; 
+  font-family: 'Inter', -apple-system, sans-serif !important;
+}
 
+.toc-title-bar { 
+  border-bottom: 2px solid #3B82F6 !important; 
+  margin-bottom: 48px !important; 
+  padding-bottom: 20px !important; 
+  text-align: left !important;
+}
+
+.toc-title-bar h2 { 
+  margin: 0 !important; 
+  font-size: 2.8em !important; 
+  font-weight: 900 !important; 
+  color: #111827 !important; 
+  letter-spacing: -0.04em !important;
+  border: none !important; 
+}
+
+.toc-list { 
+  display: flex !important; 
+  flex-direction: column !important; 
+  gap: 32px !important; 
+}
+
+.toc-folder-group { 
+  position: relative !important;
+}
+
+.toc-folder-item { 
+  display: flex !important; 
+  align-items: center !important; 
+  gap: 16px !important; 
+  margin-bottom: 12px !important; 
+}
+
+.toc-folder-number { 
+  font-family: var(--font-mono) !important; 
+  font-weight: 800 !important; 
+  color: #3B82F6 !important; 
+  font-size: 0.85em !important; 
+  background: rgba(59, 130, 246, 0.08) !important;
+  padding: 2px 8px !important;
+  border-radius: 6px !important;
+  min-width: 32px !important;
+  text-align: center !important;
+}
+
+.toc-folder-link { 
+  color: #111827 !important; 
+  text-decoration: none !important; 
+  font-size: 1.4em !important; 
+  font-weight: 800 !important; 
+  letter-spacing: -0.01em !important;
+  transition: color 0.2s ease !important; 
+}
+
+.toc-folder-link:hover {
+  color: #3B82F6 !important;
+}
+
+.toc-endpoints-container { 
+  margin-left: 15px !important; 
+  border-left: 2px solid #E5E7EB !important; 
+  padding-left: 32px !important; 
+  margin-top: 4px !important; 
+  display: flex !important; 
+  flex-direction: column !important; 
+  gap: 12px !important; 
+}
+
+.toc-endpoint-item { 
+  display: flex !important; 
+  align-items: center !important; 
+  gap: 12px !important; 
+  position: relative !important;
+}
+
+/* Timeline dot connecting to the vertical line */
+.toc-endpoint-item::before {
+  content: "" !important;
+  position: absolute !important;
+  left: -33px !important;
+  top: 50% !important;
+  width: 12px !important;
+  height: 2px !important;
+  background: #E5E7EB !important;
+}
+
+.toc-endpoint-bullet { 
+  display: none !important; /* Hide old bullet, use dot indicator */
+}
+
+.toc-endpoint-link { 
+  color: #4B5563 !important; 
+  text-decoration: none !important; 
+  font-size: 1.05em !important; 
+  font-weight: 500 !important;
+  transition: all 0.2s ease !important;
+}
+
+.toc-endpoint-link:hover {
+  color: #3B82F6 !important;
+  padding-left: 4px !important;
+}
+
+/* Printing adjustments to keep it crisp */
 @media print {
-  .toc-title-bar { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; background: #1A1A1A !important; border: 1px solid #333 !important; }
-  .toc-title-bar h2 { color: #FFFFFF !important; }
-  .toc-folder-link { color: #4F46E5 !important; }
-  .toc-endpoint-link { color: #1E293B !important; }
-  .toc-endpoints-container { border-left: 2px solid #EEE !important; }
+  .toc-title-bar { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; border-bottom: 2px solid #3B82F6 !important; }
+  .toc-folder-number { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; background: #F3F4F6 !important; color: #3B82F6 !important; }
+  .toc-endpoints-container { border-left: 2px solid #E5E7EB !important; }
+  .toc-endpoint-item::before { background: #E5E7EB !important; }
 }
 
 /* Tiptap specific overrides for TOC */

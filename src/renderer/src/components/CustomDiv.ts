@@ -23,7 +23,7 @@ export const CustomDiv = Node.create({
   name: 'customDiv',
   group: 'block',
   content: 'block*',
-  
+
   addAttributes() {
     return commonAttributes
   },
@@ -34,12 +34,16 @@ export const CustomDiv = Node.create({
         tag: 'div',
         getAttrs: (element: HTMLElement) => {
           const className = element.getAttribute('class') || ''
+          const style = element.getAttribute('style') || ''
           // Only match if it's a container (no direct text/inline allowed)
-          const isContainer = className.includes('toc-container') || 
-                              className.includes('toc-list') || 
-                              className.includes('toc-folder-group') || 
-                              className.includes('toc-endpoints-container') ||
-                              className.includes('toc-title-bar')
+          // Also match the Cover Page container which uses flex layout and 85vh height
+          const isContainer = className.includes('toc-container') ||
+            className.includes('toc-list') ||
+            className.includes('toc-folder-group') ||
+            className.includes('toc-endpoints-container') ||
+            className.includes('toc-title-bar') ||
+            style.includes('display: flex') ||
+            style.includes('height: 85vh')
           return isContainer ? {} : false
         },
       },
@@ -56,7 +60,7 @@ export const CustomContentDiv = Node.create({
   name: 'customContentDiv',
   group: 'block',
   content: 'inline*', // This allows span, a, and text
-  
+
   addAttributes() {
     return commonAttributes
   },
@@ -68,8 +72,8 @@ export const CustomContentDiv = Node.create({
         getAttrs: (element: HTMLElement) => {
           const className = element.getAttribute('class') || ''
           // Match if it's a leaf item (contains text/links)
-          const isContent = className.includes('toc-folder-item') || 
-                            className.includes('toc-endpoint-item')
+          const isContent = className.includes('toc-folder-item') ||
+            className.includes('toc-endpoint-item')
           return isContent ? {} : false
         },
       },

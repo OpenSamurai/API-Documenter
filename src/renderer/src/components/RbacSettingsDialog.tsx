@@ -16,12 +16,14 @@ interface RbacMember {
 
 export function RbacSettingsDialog() {
     const { currentProjectId, setShowRbacSettings } = useAppStore()
-    const { data: project } = useProject(currentProjectId)
+    const { data: project, isLoading: projectLoading } = useProject(currentProjectId)
     const { data: folders } = useFolders(currentProjectId)
     const { data: environments } = useEnvironments(currentProjectId)
 
     const [members, setMembers] = useState<RbacMember[]>([])
     const [loading, setLoading] = useState(false)
+    const [membersFetched, setMembersFetched] = useState(false)
+    const [fetchError, setFetchError] = useState<string | null>(null)
     const [editingMember, setEditingMember] = useState<string | null>(null)
 
     const [newUser, setNewUser] = useState({
@@ -51,14 +53,36 @@ export function RbacSettingsDialog() {
     const fetchMembers = async () => {
         if (!project?.databaseUrl || !currentProjectId) return
         setLoading(true)
-        const res = await window.electronAPI.getRbacUsers(project.databaseUrl, currentProjectId)
-        if (res.success) setMembers(res.users || [])
-        setLoading(false)
+        setFetchError(null)
+        try {
+            const res = await window.electronAPI.getRbacUsers(project.databaseUrl, currentProjectId)
+            if (res.success) {
+                setMembers(res.users || [])
+                setMembersFetched(true)
+                setFetchError(null)
+            } else {
+                // Surface the real DB error — usually caused by VPN blocking the port,
+                // a wrong DB URL, or a firewall rule.
+                const errMsg = res.error || 'Unknown database error'
+                console.error('[RBAC] getRbacUsers failed:', errMsg)
+                setFetchError(errMsg)
+            }
+        } catch (err: any) {
+            const errMsg = err?.message || String(err)
+            console.error('[RBAC] Failed to fetch members:', errMsg)
+            setFetchError(errMsg)
+        } finally {
+            setLoading(false)
+        }
     }
 
+    // Re-run whenever the project object itself resolves (not just the URL string),
+    // which fixes the race condition where project starts as undefined.
     useEffect(() => {
-        fetchMembers()
-    }, [project?.databaseUrl, currentProjectId])
+        if (project?.databaseUrl && currentProjectId) {
+            fetchMembers()
+        }
+    }, [project, currentProjectId])
 
     const handleAddUser = async () => {
         if (!newUser.email || newUser.folders.length === 0) return alert('Email and at least one folder required')
@@ -545,19 +569,64 @@ export function RbacSettingsDialog() {
                         {/* RIGHT: Active Members Section */}
                         <div className="bg-white/[0.02]" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
                             <div style={{ padding: '32px 32px 0 32px', flexShrink: 0 }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '24px' }}>
-                                    <div className="bg-neutral-600 rounded-full" style={{ width: '4px', height: '16px' }} />
-                                    <h3 style={{ fontSize: 'calc(11px * var(--font-scale))', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#D4D4D8', margin: 0 }}>
-                                        Team Directory
-                                    </h3>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '24px' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <div className="bg-neutral-600 rounded-full" style={{ width: '4px', height: '16px' }} />
+                                        <h3 style={{ fontSize: 'calc(11px * var(--font-scale))', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#D4D4D8', margin: 0 }}>
+                                            Team Directory
+                                        </h3>
+                                    </div>
+                                    <button
+                                        onClick={fetchMembers}
+                                        disabled={loading || !project?.databaseUrl}
+                                        title="Refresh members"
+                                        style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', background: 'transparent', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '8px', color: loading ? '#52525B' : '#71717A', cursor: loading || !project?.databaseUrl ? 'not-allowed' : 'pointer', fontSize: '11px', fontWeight: 600, transition: 'all 150ms ease' }}
+                                        onMouseEnter={e => { if (!loading && project?.databaseUrl) { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)'; e.currentTarget.style.color = '#D4D4D8' } }}
+                                        onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; e.currentTarget.style.color = '#71717A' }}
+                                    >
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }}>
+                                            <path d="M23 4v6h-6" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+                                        </svg>
+                                        Refresh
+                                    </button>
                                 </div>
                             </div>
 
                             <div className="custom-scrollbar" style={{ flex: 1, overflowY: 'auto', padding: '0 32px 32px 32px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                                {loading ? (
+                                {(loading || (projectLoading && !membersFetched)) ? (
                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '120px 0', color: '#71717A' }}>
                                         <div className="animate-spin border-t-white" style={{ borderRadius: '50%', height: '20px', width: '20px', border: '2px solid rgba(255,255,255,0.2)', marginRight: '16px' }} />
-                                        <span style={{ fontSize: '14px' }}>Fetching members...</span>
+                                        <span style={{ fontSize: '14px' }}>{projectLoading && !membersFetched ? 'Connecting...' : 'Fetching members...'}</span>
+                                    </div>
+                                ) : fetchError ? (
+                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '60px 32px', gap: '20px' }}>
+                                        <div style={{ width: '52px', height: '52px', borderRadius: '16px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f87171', flexShrink: 0 }}>
+                                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                                                <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
+                                            </svg>
+                                        </div>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxWidth: '340px' }}>
+                                            <h4 style={{ color: '#FFFFFF', fontWeight: 600, margin: 0, fontSize: '15px' }}>Database connection failed</h4>
+                                            <p style={{ color: '#71717A', fontSize: '13px', margin: 0, lineHeight: 1.6 }}>
+                                                Could not reach the remote database. This is usually caused by a <span style={{ color: '#fbbf24', fontWeight: 600 }}>VPN or firewall</span> blocking the connection.
+                                            </p>
+                                        </div>
+                                        <div style={{ width: '100%', maxWidth: '360px', padding: '12px 16px', background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.15)', borderRadius: '10px', textAlign: 'left' }}>
+                                            <p style={{ margin: 0, fontSize: '11px', fontWeight: 700, color: '#52525B', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px' }}>Error</p>
+                                            <p style={{ margin: 0, fontSize: '12px', color: '#f87171', fontFamily: 'monospace', wordBreak: 'break-all', lineHeight: 1.5 }}>{fetchError}</p>
+                                        </div>
+                                        <button
+                                            onClick={fetchMembers}
+                                            style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '10px', color: '#D4D4D8', fontSize: '13px', fontWeight: 600, cursor: 'pointer', transition: 'all 150ms ease' }}
+                                            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)' }}
+                                            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)' }}
+                                        >
+                                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                <path d="M23 4v6h-6" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+                                            </svg>
+                                            Retry Connection
+                                        </button>
                                     </div>
                                 ) : members.length === 0 ? (
                                     <div className="border-white/5 rounded-3xl" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '120px 40px', border: '2px dashed' }}>

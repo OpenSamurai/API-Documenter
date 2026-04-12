@@ -5,12 +5,13 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { NormalEditor } from './NormalEditor'
 import { DocEngineSidebar } from './DocEngineSidebar'
 
-interface DocSection {
+interface DocPage {
     id: string
-    title: string
+    'sidebar-title': string
+    position: number
+    markdown: string
     type: 'cover' | 'folder' | 'custom'
     visible: boolean
-    content?: string
 }
 
 export function ApiDocumentationPage() {
@@ -22,9 +23,38 @@ export function ApiDocumentationPage() {
     const [editorType, setEditorType] = useState<'markdown' | 'normal'>('normal')
     const [editorMenuOpen, setEditorMenuOpen] = useState(false)
 
-    const [sections, setSections] = useState<DocSection[]>([])
+    const [pages, setPages] = useState<DocPage[]>([])
+    const [isInitialized, setIsInitialized] = useState(false)
     const [activeSectionId, setActiveSectionId] = useState<string | null>(null)
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+    const [isNamingPage, setIsNamingPage] = useState(false)
+    const [pendingTitle, setPendingTitle] = useState('')
+    const sidebarRef = useRef<HTMLDivElement>(null)
+
+    // Close sidebar on outside click or scroll
+    useEffect(() => {
+        const handleOutsideAction = (e: Event) => {
+            if (sidebarCollapsed) return
+            
+            const target = e.target as HTMLElement
+            // Don't close if clicking inside sidebar
+            if (sidebarRef.current?.contains(target)) return
+            // Don't close if clicking the toggle button (it has its own handler)
+            if (target.closest('.sidebar-toggle-btn')) return
+
+            setSidebarCollapsed(true)
+        }
+
+        if (!sidebarCollapsed) {
+            document.addEventListener('mousedown', handleOutsideAction)
+            window.addEventListener('wheel', handleOutsideAction, { passive: true })
+        }
+
+        return () => {
+            document.removeEventListener('mousedown', handleOutsideAction)
+            window.removeEventListener('wheel', handleOutsideAction)
+        }
+    }, [sidebarCollapsed])
 
     // Fetch project data
     const project = useLiveQuery(async () =>
@@ -43,292 +73,219 @@ export function ApiDocumentationPage() {
         console.log('[ApiDoc] Data Sync:', { project, folders, apis })
     }, [project, folders, apis])
 
-    // Sync sections when folders/project load or change (REACTIVE)
+    // One-time initialization from Database
     useEffect(() => {
-        if (!project || folders === undefined) return
+        if (isInitialized || !project || !folders || !apis) return
 
-        setSections(prev => {
-            const newSections: DocSection[] = []
+        console.log('[ApiDoc] Initializing docObject from DB...')
 
-            // 1. Maintain or initialize core sections
-            const coverSection = prev.find(s => s.id === 'cover') || { id: 'cover', title: 'Cover Page', type: 'cover', visible: true }
-            const tocSection = prev.find(s => s.id === 'toc') || { id: 'toc', title: 'Table of Contents', type: 'toc', visible: true }
-            newSections.push(coverSection, tocSection)
+        const initialPages: DocPage[] = []
+        
+        // 1. Cover Page (Position 1)
+        const coverPage: DocPage = {
+            id: 'cover',
+            'sidebar-title': 'Cover Page',
+            position: 1,
+            type: 'cover',
+            visible: true,
+            markdown: `
+<div class="cover-page">
+  <div class="cover-content">
+    <div class="cover-badge">${project?.version || 'v1.0.0'}</div>
+    <h1 class="cover-title">${project?.name || 'API Documentation'}</h1>
+    <p class="cover-description">${project?.description || 'Complete technical reference and integration guide.'}</p>
+    <div class="cover-footer">
+      <div class="footer-item">
+        <span class="label">Date</span>
+        <span class="value">${new Date().toLocaleDateString()}</span>
+      </div>
+      <div class="footer-item">
+        <span class="label">Status</span>
+        <span class="value">Stable</span>
+      </div>
+    </div>
+  </div>
+</div>
 
-            // 2. Process folders with collision detection
-            const nameCounts: Record<string, number> = {}
-            const processedFolders = folders.map(f => {
-                const cleanName = f.name.replace(/^(Folder:)\s*/i, '').trim()
-                nameCounts[cleanName] = (nameCounts[cleanName] || 0) + 1
-                return { ...f, cleanName }
-            })
+<div style="page-break-after: always;"></div>
+`
+        }
+        initialPages.push(coverPage)
 
-            const activeDuplicates: Record<string, number> = {}
-            processedFolders.forEach(folder => {
-                let displayTitle = folder.cleanName
-                if (nameCounts[folder.cleanName] > 1) {
-                    activeDuplicates[folder.cleanName] = (activeDuplicates[folder.cleanName] || 0) + 1
-                    displayTitle = `${folder.cleanName} (${activeDuplicates[folder.cleanName]})`
+        // 2. Folders (Position 2+)
+        folders.forEach((f, idx) => {
+            const folderApis = apis.filter(a => a.folderId?.toString() === f.id.toString())
+            let md = `## Folder: ${f.name}\n\n`
+            if (f.description) md += `${f.description}\n\n`
+
+            folderApis.forEach(api => {
+                md += `### Endpoint: ${api.name}\n\n`
+                if (api.description) md += `${api.description}\n\n`
+                
+                md += '#### Request Details\n'
+                md += `\`\`\`http\n${api.method} ${api.path}\n\`\`\`\n\n`
+
+                // Headers
+                const headers = api.headers?.filter((h: any) => h.enabled && h.key) || []
+                if (headers.length > 0) {
+                    md += `**Headers**\n\n| Name | Value | Description |\n| --- | --- | --- |\n`
+                    headers.forEach((h: any) => {
+                        md += `| ${h.key} | ${h.value || '-'} | - |\n`
+                    })
+                    md += `\n`
                 }
 
-                // Preserve visibility if it already existed
-                const existing = prev.find(s => s.id === `folder-${folder.id}`)
-                newSections.push({
-                    id: `folder-${folder.id}`,
-                    title: displayTitle,
-                    type: 'folder',
-                    visible: existing ? existing.visible : true
-                })
-            })
+                // Parameters (URL Params)
+                const params = api.urlParams?.filter((p: any) => p.enabled && p.key) || []
+                if (params.length > 0) {
+                    md += `**Parameters**\n\n| Key | Value | Description |\n| --- | --- | --- |\n`
+                    params.forEach((p: any) => {
+                        md += `| ${p.key} | ${p.value || '-'} | - |\n`
+                    })
+                    md += `\n`
+                }
 
-            // 3. Keep custom pages
-            const customPages = prev.filter(s => s.type === 'custom')
-            newSections.push(...customPages)
-
-            // Avoid infinite loops by only updating if something actually changed (title or new sections)
-            const titlesChanged = prev.length !== newSections.length ||
-                newSections.some((ns, i) => prev[i]?.title !== ns.title || prev[i]?.id !== ns.id)
-
-            return titlesChanged ? newSections : prev
-        })
-
-        // On first load, set active section if none
-        if (activeSectionId === null && sections.length > 0) {
-            setActiveSectionId(sections[0].id)
-        }
-    }, [project, folders])
-
-    // Track which section IDs have been processed into the markdown already
-    const processedSectionIds = useRef<Set<string>>(new Set())
-
-    const generateSectionMarkdown = useCallback((section: DocSection, folders: any[], apis: any[], project: any) => {
-        let md = ''
-        if (section.id === 'cover' && project) {
-            md += `<div style="height: 85vh; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; font-family: sans-serif;">\n`
-            md += `  <h1 style="font-size: 3.5rem; margin-bottom: 0.5rem; color: #111827;">${project.name}</h1>\n`
-            md += `  <p style="font-size: 1.5rem; color: #4B5563; margin-bottom: 2rem;">Comprehensive API Reference Documentation</p>\n`
-            md += `  <div style="width: 60px; height: 4px; background: #3B82F6; margin-bottom: 2rem;"></div>\n`
-            md += `  <p style="font-size: 1.1rem; color: #6B7280;">Version: 1.0.0</p>\n`
-            md += `  <p style="font-size: 1.1rem; color: #6B7280;">Date: ${new Date().toLocaleDateString()}</p>\n`
-            md += `</div>\n`
-            md += `<div style="page-break-after: always;"></div>\n\n`
-        } else if (section.id === 'toc') {
-            // TOC is NOT rendered in the editor; it is injected at compile time only
-            return ''
-        } else if (section.type === 'folder' && folders) {
-            const folderIdValue = section.id.replace('folder-', '')
-            const folder = folders.find(f => f.id === folderIdValue)
-            if (folder) {
-                md += `<h2 id="${section.id}">Folder: ${section.title}</h2>\n`
-                if (folder.description) md += `${folder.description}\n\n`
-                const folderApis = apis?.filter(a => a.folderId === folder.id) || []
-                folderApis.forEach(api => {
-                    const apiId = `api-${api.id}`
-                    md += `<h3 id="${apiId}">Endpoint: ${api.name}</h3>\n`
-                    md += `<div><strong>Method:</strong> <span class="method method-${api.method}">${api.method}</span> &nbsp;&nbsp; <strong>Path:</strong> <code>${api.path}</code></div>\n\n`
-                    if (api.description) md += `${api.description}\n\n`
-                    const params = api.urlParams?.filter((p: any) => p.enabled && p.key) || []
-                    if (params.length > 0) {
-                        md += `#### Query Parameters\n| Parameter | Value | Description |\n| --- | --- | --- |\n`
-                        params.forEach((p: any) => { md += `| ${p.key} | ${p.value || '-'} | - |\n` })
-                        md += `\n`
-                    }
-                    const headers = api.headers?.filter((h: any) => h.enabled && h.key) || []
-                    if (headers.length > 0) {
-                        md += `#### Request Headers\n| Header | Value | Description |\n| --- | --- | --- |\n`
-                        headers.forEach((h: any) => { md += `| ${h.key} | ${h.value} | - |\n` })
-                        md += `\n`
-                    }
-                    if (api.bodyType !== 'none') {
-                        md += `#### Request Body (${api.bodyType}${api.rawType ? `: ${api.rawType}` : ''})\n`
-                        if (api.bodyType === 'raw' && api.requestBody) {
-                            try {
-                                if (api.rawType === 'json') md += `\`\`\`json\n${JSON.stringify(JSON.parse(api.requestBody), null, 2)}\n\`\`\`\n\n`
-                                else md += `\`\`\`${api.rawType || 'text'}\n${api.requestBody}\n\`\`\`\n\n`
-                            } catch (e) { md += `\`\`\`${api.rawType || 'text'}\n${api.requestBody}\n\`\`\`\n\n` }
-                        }
-                    }
-                    if (api.responseExamples?.length) {
-                        md += `#### Response Examples\n`
-                        api.responseExamples.forEach((ex: any) => {
-                            const sc = ex.statusCode >= 500 ? '5xx' : ex.statusCode >= 400 ? '4xx' : ex.statusCode >= 300 ? '3xx' : '2xx'
-                            md += `##### Example: ${ex.title} <span class="status-code status-${sc}">${ex.statusCode}</span>\n`
-                            if (ex.body) {
-                                try { md += `\`\`\`json\n${JSON.stringify(JSON.parse(ex.body), null, 2)}\n\`\`\`\n\n` }
-                                catch (e) { md += `\`\`\`text\n${ex.body}\n\`\`\`\n\n` }
-                            }
+                // Request Body
+                if (api.bodyType === 'raw' && api.requestBody) {
+                    md += `**Request Body (${api.rawType || 'json'})**\n`
+                    md += `\`\`\`${api.rawType || 'json'}\n${api.requestBody}\n\`\`\`\n\n`
+                } else if (api.bodyType === 'form-data') {
+                    const fd = api.formData?.filter((p: any) => p.enabled && p.key) || []
+                    if (fd.length > 0) {
+                        md += `**Request Body (Form Data)**\n\n| Key | Value | Type |\n| --- | --- | --- |\n`
+                        fd.forEach((p: any) => {
+                            md += `| ${p.key} | ${p.value || '-'} | ${p.type || 'text'} |\n`
                         })
+                        md += `\n`
                     }
-                })
-                md += `\n<div style="page-break-after: always;"></div>\n\n`
-            }
-        }
-        return md
-    }, [])
-
-    // Generate TOC HTML for compile-time injection
-    const generateTocForCompile = useCallback((src: string) => {
-        const items: { level: number, id: string, text: string }[] = []
-
-        if (src) {
-            // Hybrid regex to find:
-            // 1. HTML style: <h2 id="folder-1">Folder: Title</h2>
-            // 2. MD style:   ## Folder: Title
-            // Note: gm flags for multiline markdown matching
-            const combinedRegex = /(?:<(h[23])\b[^>]*?id=["']([^"']+)["'][^>]*?>([\s\S]*?)<\/h\1>)|(?:^(#{2,3})\s+(?:Folder:|Endpoint:)\s*(.*)$)/gim
-
-            let match
-            while ((match = combinedRegex.exec(src)) !== null) {
-                let level = 0
-                let id = ""
-                let rawText = ""
-
-                if (match[1]) {
-                    // HTML match
-                    level = match[1].toLowerCase() === 'h2' ? 2 : 3
-                    id = match[2]
-                    rawText = match[3]
-                } else if (match[4]) {
-                    // Markdown match
-                    level = match[4].length // ## is 2, ### is 3
-                    rawText = match[5]
-                    // Slugify if no ID (for links to work if PDF engine supports it, or just for structure)
-                    id = rawText.toLowerCase().replace(/[^a-z0-9]+/g, '-')
+                } else if (api.bodyType === 'urlencoded') {
+                    const ue = api.urlencoded?.filter((p: any) => p.enabled && p.key) || []
+                    if (ue.length > 0) {
+                        md += `**Request Body (URL Encoded)**\n\n| Key | Value |\n| --- | --- |\n`
+                        ue.forEach((p: any) => {
+                            md += `| ${p.key} | ${p.value || '-'} |\n`
+                        })
+                        md += `\n`
+                    }
                 }
 
-                // Clean the text
-                const cleanText = rawText.replace(/<[^>]+>/g, '').replace(/^(Folder:|Endpoint:)\s*/i, '').trim()
-                if (cleanText && !cleanText.toLowerCase().includes('table of contents')) {
-                    items.push({ level, id, text: cleanText })
+                // Response Examples
+                if (api.responseExamples && api.responseExamples.length > 0) {
+                    md += '#### Response Examples\n\n'
+                    api.responseExamples.forEach((ex: any) => {
+                        md += `**[${ex.statusCode}] ${ex.title || 'Response'}**\n`
+                        if (ex.description) md += `${ex.description}\n\n`
+                        md += `\`\`\`json\n${ex.body || ''}\n\`\`\`\n\n`
+                    })
                 }
-            }
-        }
+            })
+            md += `\n<div style="page-break-after: always;"></div>\n\n`
 
-        // NO FALLBACK: If nothing in MD, TOC is empty (per user request: MD is source of truth)
-        if (items.length === 0) return ''
-
-        let tocMd = `<div id="toc-section" class="toc-container">\n`
-        tocMd += `  <div class="toc-title-bar">\n`
-        tocMd += `    <h2>Table of Contents</h2>\n`
-        tocMd += `  </div>\n`
-        tocMd += `  <div class="toc-list">\n`
-
-        let folderCount = 0
-        let currentFolderGroupOpen = false
-
-        items.forEach((item) => {
-            if (item.level === 2) {
-                if (currentFolderGroupOpen) tocMd += `      </div>\n    </div>\n`
-                folderCount++
-                tocMd += `    <div class="toc-folder-group">\n`
-                tocMd += `      <div class="toc-folder-item">\n`
-                tocMd += `        <span class="toc-folder-number">${folderCount.toString().padStart(2, '0')}</span>\n`
-                tocMd += `        <a href="#${item.id}" class="toc-folder-link">${item.text}</a>\n`
-                tocMd += `      </div>\n`
-                tocMd += `      <div class="toc-endpoints-container">\n`
-                currentFolderGroupOpen = true
-            } else if (item.level === 3 && currentFolderGroupOpen) {
-                tocMd += `        <div class="toc-endpoint-item">\n`
-                tocMd += `          <span class="toc-endpoint-bullet">•</span>\n`
-                tocMd += `          <a href="#${item.id}" class="toc-endpoint-link">${item.text}</a>\n`
-                tocMd += `        </div>\n`
-            }
+            initialPages.push({
+                id: `folder-${f.id}`,
+                'sidebar-title': `${f.name}${folderApis.length > 0 ? ` (${folderApis.length})` : ''}`,
+                position: idx + 2,
+                markdown: md,
+                type: 'folder',
+                visible: true
+            })
         })
 
-        if (currentFolderGroupOpen) tocMd += `      </div>\n    </div>\n`
-        tocMd += `  </div>\n`
-        tocMd += `</div>\n`
-        tocMd += `\n<div style="page-break-after: always;"></div>\n\n`
-        return tocMd
-    }, [])
+        setPages(initialPages)
+        setIsInitialized(true)
+        setActiveSectionId('cover')
+    }, [project, folders, apis, isInitialized])
 
-    const [docSource, setDocSource] = useState({ cover: '', content: '' })
-
-    // Generate markdown template from sections (INCREMENTAL)
+    // Initial load stabilization
     useEffect(() => {
-        if (!project || folders === undefined || apis === undefined || sections.length === 0) return
-
-        let newCover = docSource.cover
-        let newContent = docSource.content
-        const currentIds = new Set(sections.map(s => s.id))
-        let addedSomething = false
-
-        // Determine if we are doing initial generation or incremental update
-        if (newCover === '' && newContent === '') {
-            // Initial load
-            sections.forEach(section => {
-                if (!section.visible) return
-                const md = generateSectionMarkdown(section, folders, apis, project)
-                if (section.id === 'cover') newCover = md
-                else if (section.id !== 'toc') newContent += md
-                processedSectionIds.current.add(section.id)
-            })
-            setDocSource({ cover: newCover, content: newContent })
-            setMarkdown(newContent) // Editor starts with content
-        } else {
-            // Incremental check: find sections that are NOT in processedSectionIds but ARE in folders/sections
-            sections.forEach(section => {
-                if (section.visible && !processedSectionIds.current.has(section.id)) {
-                    // New section detected!
-                    const md = generateSectionMarkdown(section, folders, apis, project)
-                    if (section.id === 'cover') newCover = md
-                    else if (section.id !== 'toc') newContent += '\n' + md
-                    processedSectionIds.current.add(section.id)
-                    addedSomething = true
-                }
-            })
-
-            if (addedSomething) {
-                setDocSource({ cover: newCover, content: newContent })
-                setMarkdown(newContent)
-            }
+        if (isInitialized && activeSectionId === null && pages.length > 0) {
+            setActiveSectionId('cover')
         }
+    }, [isInitialized, pages, activeSectionId])
 
-        // Also clean up processed IDs that no longer exist in sections
-        processedSectionIds.current.forEach((id: string) => {
-            if (!currentIds.has(id) && id !== 'cover' && id !== 'toc') {
-                processedSectionIds.current.delete(id)
-            }
-        })
-
-    }, [project, folders, apis, sections])
 
     const handleEditorChange = useCallback((val: string) => {
         setMarkdown(val)
-        if (activeSectionId === 'cover') {
-            setDocSource(prev => ({ ...prev, cover: val }))
-        } else {
-            setDocSource(prev => ({ ...prev, content: val }))
-        }
+        if (!activeSectionId) return
+
+        setPages(prev => prev.map(p => p.id === activeSectionId ? { ...p, markdown: val } : p))
     }, [activeSectionId])
 
-    // Update editor markdown when switching between cover and content
     useEffect(() => {
-        if (activeSectionId === 'cover') {
-            setMarkdown(docSource.cover)
-        } else {
-            setMarkdown(docSource.content)
-        }
-    }, [activeSectionId])
+        if (!activeSectionId) return
+        const page = pages.find(p => p.id === activeSectionId)
+        setMarkdown(page?.markdown || '')
+    }, [activeSectionId, pages])
 
-    // Inject TOC and assemble parts for PDF compilation
     const getMarkdownForCompile = useCallback(() => {
-        const tocSection = sections.find(s => s.id === 'toc')
-        const showToc = tocSection?.visible
+        const sortedPages = [...pages]
+            .filter(p => p.visible)
+            .sort((a, b) => a.position - b.position)
 
-        // Use the absolute latest content from the markdown state (editor) for current TOC
-        const tocContent = showToc ? generateTocForCompile(markdown) : ''
+        if (sortedPages.length === 0) return ''
 
-        // Assemble precisely: Cover + TOC + Content
-        // docSource.cover already includes its own page break at the end
-        return docSource.cover + tocContent + markdown
-    }, [docSource, markdown, sections, generateTocForCompile])
+        // Generate TOC from all pages except the cover
+        const items: { level: number, id: string, text: string }[] = []
+        const combinedRegex = /^(#{1,3})\s+(.*)$/gim
+        let match
+        
+        const tocSourceMarkdown = sortedPages
+            .filter(p => p.type !== 'cover')
+            .map(p => p.markdown)
+            .join('\n\n')
 
-    const handleRecompile = async () => {
-        if (!markdown || isCompiling) return
+        while ((match = combinedRegex.exec(tocSourceMarkdown)) !== null) {
+            const level = match[1].length
+            const rawText = match[2]
+            const id = rawText.toLowerCase().replace(/[^a-z0-9]+/g, '-')
+            const cleanText = rawText.replace(/^(Folder:|Endpoint:)\s*/i, '').trim()
+            if (cleanText && !cleanText.toLowerCase().includes('table of contents')) {
+                items.push({ level, id, text: cleanText })
+            }
+        }
+
+        let tocMd = ''
+        if (items.length > 0) {
+            tocMd = `<div id="toc-section" class="toc-container">\n  <div class="toc-title-bar"><h2>Table of Contents</h2></div>\n  <div class="toc-list">\n`
+            let folderCount = 0
+            let currentFolderGroupOpen = false
+            items.forEach((item) => {
+                if (item.level <= 2) {
+                    if (currentFolderGroupOpen) tocMd += `      </div>\n    </div>\n`
+                    folderCount++
+                    tocMd += `    <div class="toc-folder-group">\n      <div class="toc-folder-item"><span class="toc-folder-number">${folderCount.toString().padStart(2, '0')}</span><a href="#${item.id}" class="toc-folder-link">${item.text}</a></div>\n      <div class="toc-endpoints-container">\n`
+                    currentFolderGroupOpen = true
+                } else if (item.level === 3 && currentFolderGroupOpen) {
+                    tocMd += `        <div class="toc-endpoint-item"><span class="toc-endpoint-bullet">•</span><a href="#${item.id}" class="toc-endpoint-link">${item.text}</a></div>\n`
+                }
+            })
+            if (currentFolderGroupOpen) tocMd += `      </div>\n    </div>\n`
+            tocMd += `  </div>\n</div>\n\n<div style="page-break-after: always;"></div>\n\n`
+        }
+
+        // Final assembly: Cover, TOC, all other pages
+        const assembledParts: string[] = []
+        sortedPages.forEach((p, idx) => {
+            assembledParts.push(p.markdown)
+            // Inject TOC after the 1st page (usually Cover)
+            if (idx === 0 && tocMd) {
+                assembledParts.push(tocMd)
+            }
+        })
+
+        // If fewer than 2 pages, just append TOC at the end of what we have if not already added
+        if (sortedPages.length < 2 && tocMd && assembledParts.length > 0) {
+            assembledParts.push(tocMd)
+        }
+
+        return assembledParts.filter(Boolean).join('\n\n')
+    }, [pages])
+
+    const handleRecompile = useCallback(async () => {
+        const compileMd = getMarkdownForCompile()
+        if (!compileMd.trim() || isCompiling) return
         setIsCompiling(true)
         try {
-            const compileMd = getMarkdownForCompile()
             const result = await (window as any).electronAPI.previewDocPdf(compileMd)
             if (result.success && result.data) {
                 if (pdfUrl) URL.revokeObjectURL(pdfUrl)
@@ -343,7 +300,16 @@ export function ApiDocumentationPage() {
         } finally {
             setIsCompiling(false)
         }
-    }
+    }, [getMarkdownForCompile, isCompiling, pdfUrl])
+
+    // Auto-compile PDF preview once initialized
+    useEffect(() => {
+        if (isInitialized && pages.length > 0 && !pdfUrl && !isCompiling) {
+            handleRecompile()
+        }
+    }, [isInitialized, pages, pdfUrl, isCompiling, handleRecompile])
+
+
 
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -354,13 +320,13 @@ export function ApiDocumentationPage() {
         }
         window.addEventListener('keydown', handleKeyDown)
         return () => window.removeEventListener('keydown', handleKeyDown)
-    }, [markdown, isCompiling])
+    }, [handleRecompile])
 
     const handleExportPdf = async () => {
-        if (!markdown || isExporting) return
+        const compileMd = getMarkdownForCompile()
+        if (!compileMd.trim() || isExporting) return
         setIsExporting(true)
         try {
-            const compileMd = getMarkdownForCompile()
             const fileName = `${project?.name || 'api'}-docs.pdf`
             const result = await (window as any).electronAPI.generateDocPdf(compileMd, fileName)
             if (result.success) { /* Success Notification */ }
@@ -373,22 +339,61 @@ export function ApiDocumentationPage() {
     }
 
     const handleToggleSection = (id: string) => {
-        setSections(prev => prev.map(s => s.id === id ? { ...s, visible: !s.visible } : s))
-        setMarkdown('')
+        setPages(prev => prev.map(p => p.id === id ? { ...p, visible: !p.visible } : p))
     }
 
     const handleSelectSection = (id: string) => {
         setActiveSectionId(id)
     }
 
-    const handleAddCustomPage = () => {
-        const title = prompt('Enter page title:')
-        if (title) {
-            const newId = `custom-${Date.now()}`
-            setSections(prev => [...prev, { id: newId, title, type: 'custom', visible: true, content: `# ${title}\n\nStart writing...` }])
-            setMarkdown('')
+    const handleAddCustomPage = useCallback(() => {
+        setPendingTitle(`Untitled Page ${pages.filter(p => p.type === 'custom').length + 1}`)
+        setIsNamingPage(true)
+    }, [pages])
+
+    const confirmAddPage = () => {
+        const title = pendingTitle.trim() || 'Untitled Page'
+        const newId = `custom-${Date.now()}`
+        const maxPos = pages.length > 0 ? Math.max(...pages.map(p => p.position)) : 0
+        
+        const newPage: DocPage = {
+            id: newId,
+            'sidebar-title': title,
+            position: maxPos + 1,
+            type: 'custom',
+            visible: true,
+            markdown: `# ${title}\n\nStart writing your custom content here...`
         }
+
+        setPages(prev => [...prev, newPage])
+        setActiveSectionId(newId)
+        setIsNamingPage(false)
+        setPendingTitle('')
     }
+
+    const handleReorderSection = useCallback((id: string, direction: 'up' | 'down') => {
+        setPages(prev => {
+            const sorted = [...prev].sort((a, b) => a.position - b.position)
+            const index = sorted.findIndex(p => p.id === id)
+            if (index < 0) return prev
+
+            if (index === 1 && direction === 'up') return prev // Can't move before cover (Wait, index 1 is first after cover)
+            if (index === 0) return prev // Can't move cover
+
+            const targetIndex = direction === 'up' ? index - 1 : index + 1
+            if (targetIndex < 1 || targetIndex >= sorted.length) return prev
+
+            // Swap positions
+            const currentItem = sorted[index]
+            const targetItem = sorted[targetIndex]
+            
+            const currentPos = currentItem.position
+            currentItem.position = targetItem.position
+            targetItem.position = currentPos
+
+            return [...prev] // Trigger re-render (position mutation is fine within local copy or we can map)
+        })
+    }, [])
 
     return (
         <div style={{
@@ -416,9 +421,7 @@ export function ApiDocumentationPage() {
                             transition: 'all 0.2s ease'
                         }}
                     >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                            <line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" />
-                        </svg>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M19 12H5" /><polyline points="12 19 5 12 12 5" /></svg>
                         Exit Builder
                     </button>
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -481,9 +484,10 @@ export function ApiDocumentationPage() {
                 {/* Sidebar Collapse Toggle */}
                 <button
                     onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+                    className="sidebar-toggle-btn"
                     style={{
                         position: 'absolute', top: '50%', left: sidebarCollapsed ? '0' : '260px',
-                        transform: 'translateY(-50%)', zIndex: 110,
+                        transform: 'translateY(-50%)', zIndex: 130,
                         width: '16px', height: '48px', background: '#1A1A1A',
                         border: '1px solid rgba(255, 255, 255, 0.1)', borderLeft: 'none',
                         borderRadius: '0 8px 8px 0', color: '#6B7280', cursor: 'pointer',
@@ -500,25 +504,42 @@ export function ApiDocumentationPage() {
                 </button>
 
                 {/* Section Sidebar */}
-                <div style={{
-                    width: sidebarCollapsed ? '0' : '260px',
-                    overflow: 'hidden',
-                    transition: 'width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                    flexShrink: 0
+                <div 
+                    ref={sidebarRef}
+                    style={{
+                    position: 'absolute',
+                    top: 0,
+                    bottom: 0,
+                    left: 0,
+                    width: '260px',
+                    zIndex: 120,
+                    transform: sidebarCollapsed ? 'translateX(-100%)' : 'translateX(0)',
+                    transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                    boxShadow: sidebarCollapsed ? 'none' : '20px 0 50px rgba(0,0,0,0.5)',
+                    background: '#0F0F0F',
+                    overflow: 'hidden'
                 }}>
                     <DocEngineSidebar
-                        sections={sections}
+                        pages={pages}
                         activeSectionId={activeSectionId}
                         onToggleSection={handleToggleSection}
                         onSelectSection={handleSelectSection}
                         onAddCustomPage={handleAddCustomPage}
+                        onReorderSection={handleReorderSection}
                     />
                 </div>
 
                 {/* Editor & Preview Split */}
-                <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+                <div style={{ 
+                    display: 'flex', 
+                    flex: 1, 
+                    overflow: 'hidden', 
+                    width: '100%', 
+                    marginLeft: 0, // Overlaid sidebar - no resizing
+                    transition: 'margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1)' 
+                }}>
                     {/* Editor Container */}
-                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', borderRight: '1px solid #1F1F1F' }}>
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', borderRight: '1px solid #1F1F1F', minWidth: 0 }}>
                         <div style={{
                             padding: '8px 16px', background: '#151515', borderBottom: '1px solid #1F1F1F',
                             display: 'flex', alignItems: 'center', justifyContent: 'space-between'
@@ -537,14 +558,25 @@ export function ApiDocumentationPage() {
                                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M6 9l6 6 6-6" /></svg>
                                 </button>
                                 {editorMenuOpen && (
-                                    <div style={{
-                                        position: 'absolute', top: '100%', left: 0, zIndex: 60, background: '#1A1A1A',
-                                        border: '1px solid #2A2A2A', borderRadius: '4px', marginTop: '8px', width: '150px',
-                                        boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.4)'
-                                    }}>
-                                        <button onClick={() => { setEditorType('markdown'); setEditorMenuOpen(false); }} style={{ width: '100%', textAlign: 'left', padding: '8px 12px', background: 'transparent', border: 'none', color: '#D1D5DB', fontSize: '11px', cursor: 'pointer' }}>MARKDOWN</button>
-                                        <button onClick={() => { setEditorType('normal'); setEditorMenuOpen(false); }} style={{ width: '100%', textAlign: 'left', padding: '8px 12px', background: 'transparent', border: 'none', color: '#D1D5DB', fontSize: '11px', cursor: 'pointer' }}>NORMAL</button>
-                                    </div>
+                                    <>
+                                        <div 
+                                            onClick={() => setEditorMenuOpen(false)}
+                                            style={{
+                                                position: 'fixed',
+                                                inset: 0,
+                                                zIndex: 190,
+                                                background: 'transparent'
+                                            }}
+                                        />
+                                        <div style={{
+                                            position: 'absolute', top: '100%', left: 0, zIndex: 200, background: '#1A1A1A',
+                                            border: '1px solid #2A2A2A', borderRadius: '4px', marginTop: '8px', width: '150px',
+                                            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.4)'
+                                        }}>
+                                            <button onClick={() => { setEditorType('markdown'); setEditorMenuOpen(false); }} style={{ width: '100%', textAlign: 'left', padding: '8px 12px', background: 'transparent', border: 'none', color: '#D1D5DB', fontSize: '11px', cursor: 'pointer' }}>MARKDOWN</button>
+                                            <button onClick={() => { setEditorType('normal'); setEditorMenuOpen(false); }} style={{ width: '100%', textAlign: 'left', padding: '8px 12px', background: 'transparent', border: 'none', color: '#D1D5DB', fontSize: '11px', cursor: 'pointer' }}>NORMAL</button>
+                                        </div>
+                                    </>
                                 )}
                             </div>
                         </div>
@@ -552,7 +584,7 @@ export function ApiDocumentationPage() {
                         {editorType === 'markdown' ? (
                             <textarea
                                 value={markdown}
-                                onChange={(e) => setMarkdown(e.target.value)}
+                                onChange={(e) => handleEditorChange(e.target.value)}
                                 style={{
                                     flex: 1, padding: '24px', background: '#0F0F0F', color: '#D1D5DB',
                                     border: 'none', resize: 'none', outline: 'none',
@@ -587,6 +619,64 @@ export function ApiDocumentationPage() {
                     </div>
                 </div>
             </div>
+
+            {/* Custom Page Title Modal */}
+            {isNamingPage && (
+                <div style={{
+                    position: 'fixed', inset: 0, zIndex: 1000,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    background: 'rgba(0, 0, 0, 0.8)', backdropFilter: 'blur(8px)'
+                }}>
+                    <div style={{
+                        width: '400px', background: '#111111', border: '1px solid #1F1F1F',
+                        borderRadius: '16px', padding: '24px', boxShadow: '0 20px 40px rgba(0,0,0,0.4)',
+                        display: 'flex', flexDirection: 'column', gap: '20px'
+                    }}>
+                        <div>
+                            <h3 style={{ margin: '0 0 8px', fontSize: '18px', fontWeight: 700, color: '#FFFFFF' }}>New Document Page</h3>
+                            <p style={{ margin: 0, fontSize: '13px', color: '#6B7280' }}>Give your custom page a descriptive title.</p>
+                        </div>
+
+                        <input
+                            autoFocus
+                            value={pendingTitle}
+                            onChange={(e) => setPendingTitle(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') confirmAddPage()
+                                if (e.key === 'Escape') setIsNamingPage(false)
+                            }}
+                            placeholder="Enter title..."
+                            style={{
+                                width: '100%', padding: '12px 16px', background: '#0A0A0A',
+                                border: '1px solid #2A2A2A', borderRadius: '10px',
+                                color: '#FFFFFF', fontSize: '14px', outline: 'none'
+                            }}
+                        />
+
+                        <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+                            <button
+                                onClick={() => setIsNamingPage(false)}
+                                style={{
+                                    padding: '10px 18px', background: 'transparent', border: 'none',
+                                    color: '#6B7280', fontSize: '13px', fontWeight: 600, cursor: 'pointer'
+                                }}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={confirmAddPage}
+                                style={{
+                                    padding: '10px 24px', background: '#FFFFFF', border: 'none',
+                                    color: '#000000', fontSize: '13px', fontWeight: 700,
+                                    borderRadius: '10px', cursor: 'pointer', boxShadow: '0 4px 12px rgba(255,255,255,0.1)'
+                                }}
+                            >
+                                Create Page
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }
