@@ -4,11 +4,12 @@ import { useFolder } from '@/hooks/useFolders'
 import { useEnvironments } from '@/hooks/useEnvironments'
 import { useAppStore } from '@/stores/appStore'
 import { KeyValueEditor } from './KeyValueEditor'
-import { JsonEditor } from './JsonEditor'
+import { CodeEditor } from './CodeEditor'
 import { ResponseViewer } from './ResponseViewer'
 import { ResponsePanel } from './ResponsePanel'
 import { VariableInput } from './VariableInput'
 import type { HttpResponse } from './ResponsePanel'
+import { METHOD_COLORS } from '@/types'
 import type { HttpMethod, BodyType, RawType, EditorTab, KeyValuePair, ResponseExample } from '@/types'
 import { v4 as uuid } from 'uuid'
 
@@ -398,11 +399,18 @@ export function RequestEditor({ apiId }: Props) {
                         {/* Method dropdown */}
                         <div style={{ position: 'relative', flexShrink: 0 }}>
                             <button onClick={() => setMethodDd(!methodDd)}
-                                style={{ display: 'flex', alignItems: 'center', gap: '8px', fontFamily: 'monospace', fontWeight: 600, fontSize: '13px', background: '#181818', border: '1px solid #2A2A2A', borderRadius: '10px', padding: '8px 12px', color: '#FFFFFF', transition: '150ms ease', minWidth: '80px' }}
-                                onMouseEnter={e => { e.currentTarget.style.borderColor = '#3A3A3A' }}
-                                onMouseLeave={e => { e.currentTarget.style.borderColor = '#2A2A2A' }}>
+                                style={{
+                                    display: 'flex', alignItems: 'center', gap: '8px', fontFamily: 'monospace', fontWeight: 700, fontSize: '12px',
+                                    background: METHOD_COLORS[method].bg,
+                                    border: `1px solid ${METHOD_COLORS[method].border}`,
+                                    borderRadius: '10px', padding: '8px 14px',
+                                    color: METHOD_COLORS[method].text,
+                                    transition: '150ms ease', minWidth: '85px'
+                                }}
+                                onMouseEnter={e => { e.currentTarget.style.filter = 'brightness(1.2)' }}
+                                onMouseLeave={e => { e.currentTarget.style.filter = 'none' }}>
                                 {method}
-                                <svg width="8" height="5" viewBox="0 0 8 5" fill="none" stroke="#6B7280" strokeWidth="1.3" strokeLinecap="round"><polyline points="1,1 4,4 7,1" /></svg>
+                                <svg width="8" height="5" viewBox="0 0 8 5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><polyline points="1,1 4,4 7,1" /></svg>
                             </button>
                             {methodDd && (
                                 <>
@@ -411,8 +419,14 @@ export function RequestEditor({ apiId }: Props) {
                                         style={{ position: 'absolute', top: '100%', left: 0, zIndex: 50, marginTop: '8px', background: '#111111', border: '1px solid #2A2A2A', borderRadius: '10px', boxShadow: '0 8px 32px rgba(0,0,0,0.6)', padding: '4px', minWidth: '140px', animation: 'fadeUp 150ms ease' }}>
                                         {METHODS.map(m => (
                                             <button key={m} onClick={() => { setMethod(m); setMethodDd(false) }}
-                                                style={{ display: 'block', width: '100%', textAlign: 'left', fontFamily: 'monospace', fontWeight: 600, fontSize: '13px', padding: '8px 12px', borderRadius: '8px', color: method === m ? '#FFFFFF' : '#9CA3AF', background: method === m ? '#1F1F1F' : 'transparent', transition: '150ms ease', border: 'none', cursor: 'pointer' }}
-                                                onMouseEnter={e => { if (method !== m) e.currentTarget.style.background = '#1F1F1F' }}
+                                                style={{
+                                                    display: 'block', width: '100%', textAlign: 'left', fontFamily: 'monospace', fontWeight: 700, fontSize: '12px',
+                                                    padding: '8px 12px', borderRadius: '8px',
+                                                    color: METHOD_COLORS[m].text,
+                                                    background: method === m ? METHOD_COLORS[m].bg : 'transparent',
+                                                    transition: '150ms ease', border: 'none', cursor: 'pointer'
+                                                }}
+                                                onMouseEnter={e => { e.currentTarget.style.background = METHOD_COLORS[m].bg }}
                                                 onMouseLeave={e => { if (method !== m) e.currentTarget.style.background = 'transparent' }}>
                                                 {m}
                                             </button>
@@ -476,7 +490,7 @@ export function RequestEditor({ apiId }: Props) {
                 </div>
 
                 {/* ── Tab Content ── */}
-                <div style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
+                <div style={{ flex: 1, overflowY: 'auto', padding: '24px', scrollBehavior: 'smooth' }}>
                     {activeEditorTab === 'params' && (
                         <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                             <SectionHeader title="URL Parameters" sub="Query string parameters appended to the request URL" />
@@ -532,16 +546,11 @@ export function RequestEditor({ apiId }: Props) {
 
                             {bodyType === 'raw' && (
                                 <>
-                                    {rawType === 'json' ? (
-                                        <JsonEditor value={requestBody} onChange={handleRequestBodyChange} />
-                                    ) : (
-                                        <div style={{ background: '#111111', border: '1px solid #1F1F1F', borderRadius: '12px', overflow: 'hidden' }}>
-                                            <textarea value={requestBody} onChange={e => handleRequestBodyChange(e.target.value)} placeholder={`Raw ${rawType} body…`}
-                                                className="w-full"
-                                                style={{ padding: '16px', fontSize: '12px', fontFamily: 'monospace', resize: 'none', background: 'transparent', color: '#FFFFFF', border: 'none', minHeight: '200px', tabSize: 2, lineHeight: 1.8, outline: 'none' }}
-                                                spellCheck={false} />
-                                        </div>
-                                    )}
+                                    <CodeEditor 
+                                        value={requestBody} 
+                                        onChange={handleRequestBodyChange} 
+                                        language={rawType}
+                                    />
                                 </>
                             )}
                             {bodyType === 'form-data' && <KeyValueEditor pairs={formData} onChange={handleFormDataChange} keyPlaceholder="Field" valuePlaceholder="Value" variables={variablesMap} showTypeSelector />}
@@ -600,7 +609,7 @@ export function RequestEditor({ apiId }: Props) {
                             Collapse ⌘J
                         </button>
                     </div>
-                    <div style={{ flex: 1, overflowY: 'auto', padding: '20px' }}>
+                    <div style={{ flex: 1, overflowY: 'auto', padding: '20px', scrollBehavior: 'smooth' }}>
                         <ResponsePanel response={liveResponse} loading={sending} onSaveAsExample={folder?.role === 'viewer' ? undefined : saveAsExample} />
                     </div>
                 </div>

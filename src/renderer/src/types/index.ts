@@ -164,13 +164,13 @@ export interface MethodColorStyle {
 }
 
 export const METHOD_COLORS: Record<HttpMethod, MethodColorStyle> = {
-    GET: { bg: 'transparent', text: '#FFFFFF', border: '#2A2A2A' },
-    POST: { bg: 'transparent', text: '#FFFFFF', border: '#2A2A2A' },
-    PUT: { bg: 'transparent', text: '#FFFFFF', border: '#2A2A2A' },
-    DELETE: { bg: 'transparent', text: '#FFFFFF', border: '#2A2A2A' },
-    PATCH: { bg: 'transparent', text: '#FFFFFF', border: '#2A2A2A' },
-    HEAD: { bg: 'transparent', text: '#FFFFFF', border: '#2A2A2A' },
-    OPTIONS: { bg: 'transparent', text: '#FFFFFF', border: '#2A2A2A' }
+    GET: { bg: 'rgba(74, 222, 128, 0.1)', text: '#4ade80', border: 'rgba(74, 222, 128, 0.2)' },
+    POST: { bg: 'rgba(250, 204, 21, 0.1)', text: '#facc15', border: 'rgba(250, 204, 21, 0.2)' },
+    PUT: { bg: 'rgba(59, 130, 246, 0.1)', text: '#3b82f6', border: 'rgba(59, 130, 246, 0.2)' },
+    DELETE: { bg: 'rgba(248, 113, 113, 0.1)', text: '#f87171', border: 'rgba(248, 113, 113, 0.2)' },
+    PATCH: { bg: 'rgba(167, 139, 250, 0.1)', text: '#a78bfa', border: 'rgba(167, 139, 250, 0.2)' },
+    HEAD: { bg: 'rgba(148, 163, 184, 0.1)', text: '#94a3b8', border: 'rgba(148, 163, 184, 0.2)' },
+    OPTIONS: { bg: 'rgba(148, 163, 184, 0.1)', text: '#94a3b8', border: 'rgba(148, 163, 184, 0.2)' }
 }
 
 export const SYNC_ICONS: Record<SyncStatus, { icon: string; label: string }> = {

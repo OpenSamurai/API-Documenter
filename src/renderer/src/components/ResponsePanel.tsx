@@ -1,4 +1,10 @@
-import { useState } from 'react'
+import { useState, useMemo, useRef } from 'react'
+import CodeMirror from '@uiw/react-codemirror'
+import { json } from '@codemirror/lang-json'
+import { html } from '@codemirror/lang-html'
+import { vscodeDark } from '@uiw/codemirror-theme-vscode'
+import { EditorView } from '@codemirror/view'
+import { foldAll, unfoldAll } from '@codemirror/language'
 
 export interface HttpResponse {
     success: boolean
@@ -22,6 +28,24 @@ type Tab = 'body' | 'headers' | 'meta'
 export function ResponsePanel({ response, loading, onSaveAsExample }: Props) {
     const [tab, setTab] = useState<Tab>('body')
     const [copied, setCopied] = useState(false)
+    const editorRef = useRef<any>(null)
+
+    const contentType = response?.headers?.['content-type']?.toLowerCase() || ''
+    const extensions = useMemo(() => {
+        const exts = [
+            vscodeDark,
+            EditorView.lineWrapping,
+            EditorView.theme({
+                '&': { fontSize: '12px', background: '#0F0F0F !important' },
+                '.cm-gutters': { background: '#0F0F0F', border: 'none', color: '#4B5563' },
+                '.cm-content': { padding: '16px 0' },
+                '.cm-line': { padding: '0 16px' }
+            })
+        ]
+        if (contentType.includes('json')) exts.push(json())
+        if (contentType.includes('html') || contentType.includes('xml')) exts.push(html())
+        return exts
+    }, [contentType])
 
     const copy = (text: string) => {
         navigator.clipboard.writeText(text)
@@ -84,6 +108,15 @@ export function ResponsePanel({ response, loading, onSaveAsExample }: Props) {
         { key: 'meta', label: 'Meta' }
     ]
 
+    const getStatusColor = (status?: number) => {
+        if (!status) return '#6B7280'
+        if (status >= 200 && status < 300) return '#4ade80' // Success - Green
+        if (status >= 300 && status < 400) return '#facc15' // Redirect - Yellow
+        if (status >= 400 && status < 500) return '#fb923c' // Client Error - Orange
+        if (status >= 500) return '#f87171' // Server Error - Red
+        return '#6B7280'
+    }
+
     return (
         <div style={{ background: '#111111', border: '1px solid #1F1F1F', borderRadius: '12px', overflow: 'hidden' }}>
 
@@ -91,11 +124,11 @@ export function ResponsePanel({ response, loading, onSaveAsExample }: Props) {
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '0 16px', height: '44px', borderBottom: '1px solid #1F1F1F', background: '#151515' }}>
                 {/* Status */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: response.status && response.status < 400 ? '#FFFFFF' : '#6B7280' }} />
-                    <span style={{ fontSize: '14px', fontWeight: 700, fontFamily: 'monospace', color: '#FFFFFF' }}>
+                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: getStatusColor(response.status) }} />
+                    <span style={{ fontSize: '14px', fontWeight: 700, fontFamily: 'monospace', color: getStatusColor(response.status) }}>
                         {response.status}
                     </span>
-                    <span style={{ fontSize: '12px', color: '#9CA3AF' }}>{response.statusText}</span>
+                    <span style={{ fontSize: '12px', color: '#9CA3AF', fontWeight: 500 }}>{response.statusText}</span>
                 </div>
 
                 {/* Meta pills */}
@@ -126,6 +159,12 @@ export function ResponsePanel({ response, loading, onSaveAsExample }: Props) {
                 })}
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: 'auto' }}>
+                    {tab === 'body' && (
+                        <>
+                            <SmallBtn onClick={() => editorRef.current?.view && foldAll(editorRef.current.view)}>Collapse All</SmallBtn>
+                            <SmallBtn onClick={() => editorRef.current?.view && unfoldAll(editorRef.current.view)}>Expand All</SmallBtn>
+                        </>
+                    )}
                     <SmallBtn onClick={() => copy(prettyBody)}>{copied ? '✓ Copied' : 'Copy'}</SmallBtn>
                     {onSaveAsExample && (
                         <SmallBtn onClick={() => onSaveAsExample(response.status || 200, prettyBody, response.headers || {})}>Save as Example</SmallBtn>
@@ -134,11 +173,27 @@ export function ResponsePanel({ response, loading, onSaveAsExample }: Props) {
             </div>
 
             {/* ── Content ── */}
-            <div style={{ overflow: 'auto', maxHeight: '400px' }}>
+            <div style={{ background: '#0F0F0F' }}>
                 {tab === 'body' && (
-                    <pre style={{ padding: '16px', fontSize: '11px', fontFamily: 'monospace', lineHeight: 1.6, whiteSpace: 'pre-wrap', color: '#A1A1A1', background: '#0F0F0F', margin: 0, minHeight: '100px' }}>
-                        {prettyBody || '(empty response body)'}
-                    </pre>
+                    <div style={{ background: '#0F0F0F', minHeight: '100px' }}>
+                        <CodeMirror
+                            ref={editorRef}
+                            value={prettyBody || ''}
+                            height="auto"
+                            minHeight="100px"
+                            extensions={extensions}
+                            readOnly={true}
+                            editable={false}
+                            theme={vscodeDark}
+                            basicSetup={{
+                                lineNumbers: true,
+                                foldGutter: true,
+                                dropCursor: false,
+                                allowMultipleSelections: false,
+                                indentOnInput: false,
+                            }}
+                        />
+                    </div>
                 )}
 
                 {tab === 'headers' && (

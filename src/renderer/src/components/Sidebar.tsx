@@ -4,6 +4,7 @@ import { useProjects, useSyncProject } from '@/hooks/useProjects'
 import { useFolders, useDeleteFolder } from '@/hooks/useFolders'
 import { useApis, useDeleteApi } from '@/hooks/useApis'
 import { useSync } from '@/hooks/useSync'
+import { METHOD_COLORS } from '@/types'
 import type { Project, Folder, ApiCollection } from '@/types'
 import { useQueryClient } from '@tanstack/react-query'
 
@@ -32,14 +33,15 @@ export function Sidebar() {
     const [expanded, setExpanded] = useState<Set<string>>(new Set())
     const [ctx, setCtx] = useState<{ x: number; y: number; type: 'folder' | 'api'; id: string } | null>(null)
     const [confirmDelete, setConfirmDelete] = useState<{ type: 'folder' | 'api'; id: string; folderId?: string; projectId?: string } | null>(null)
-    const [isActionsExpanded, setIsActionsExpanded] = useState(false) // Added state for collapsible actions
+    const [isActionsExpanded, setIsActionsExpanded] = useState(false)
     const [version, setVersion] = useState<string>('')
+    const [projectDdOpen, setProjectDdOpen] = useState(false)
 
     useEffect(() => {
         ; (window as any).electronAPI.getAppVersion().then(setVersion)
     }, [])
 
-    useEffect(() => { const h = () => setCtx(null); window.addEventListener('click', h); return () => window.removeEventListener('click', h) }, [])
+    useEffect(() => { const h = () => { setCtx(null); setProjectDdOpen(false) }; window.addEventListener('click', h); return () => window.removeEventListener('click', h) }, [])
 
     const toggle = (id: string) => {
         setExpanded(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
@@ -108,44 +110,106 @@ export function Sidebar() {
                 <div style={{ flexShrink: 0, borderBottom: '1px solid #1A1A1A' }}>
                     <p style={{ padding: '20px 20px 10px 20px', color: '#444', margin: 0, fontSize: 'calc(9px * var(--font-scale))', letterSpacing: '0.15em', textTransform: 'uppercase', fontWeight: 800 }}>Project Workspace</p>
                     <div style={{ padding: '0 16px 20px 16px' }}>
-                        <select value={isTeamWorkspace ? 'TEAM_PROJECT' : (currentProjectId || '')}
-                            onChange={e => {
-                                if (e.target.value === 'TE_AM_CONNECT') { setShowTeamConnect(true); return }
-                                if (e.target.value === 'EXIT_TEAM') { setTeamWorkspace(false); return }
-                                selectProject(e.target.value || null)
-                            }}
-                            className="rounded-xl cursor-pointer"
+                    <div style={{ padding: '0 16px 20px 16px', position: 'relative' }}>
+                        {/* Custom Dropdown Trigger */}
+                        <button
+                            onClick={(e) => { e.stopPropagation(); setProjectDdOpen(!projectDdOpen) }}
+                            className="rounded-xl border transition-all duration-200"
                             style={{
                                 width: '100%', height: '44px', padding: '0 14px',
                                 background: isTeamWorkspace ? 'linear-gradient(135deg, #1a1a1a 0%, #0a0a0a 100%)' : '#111111',
-                                border: isTeamWorkspace ? '1px solid #444' : '1px solid #222',
+                                border: projectDdOpen ? '1px solid #444' : (isTeamWorkspace ? '1px solid #333' : '1px solid #222'),
                                 color: '#FFFFFF',
-                                fontSize: 'calc(13px * var(--font-scale))', fontWeight: 600,
-                                appearance: 'none', transition: '150ms ease',
-                                backgroundImage: 'url("data:image/svg+xml,%3Csvg width=\'8\' height=\'5\' viewBox=\'0 0 8 5\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cpath d=\'M1 1l3 3 3-3\' stroke=\'%236B7280\' stroke-width=\'1.5\' fill=\'none\' stroke-linecap=\'round\'/%3E%3C/svg%3E")',
-                                backgroundRepeat: 'no-repeat', backgroundPosition: 'right 14px center'
+                                display: 'flex', alignItems: 'center', gap: '10px',
+                                cursor: 'pointer', textAlign: 'left'
                             }}
-                            onFocus={e => { e.currentTarget.style.borderColor = '#444'; e.currentTarget.style.background = '#151515' }}
-                            onBlur={e => { e.currentTarget.style.borderColor = isTeamWorkspace ? '#444' : '#222'; e.currentTarget.style.background = isTeamWorkspace ? '#1a1a1a' : '#111111' }}>
-                            {isTeamWorkspace ? (
-                                <>
-                                    <option value="TEAM_PROJECT">Remote: {teamConfig?.projectId.slice(0, 8)}...</option>
-                                    <option value="EXIT_TEAM">← Exit Team Workspace</option>
-                                </>
-                            ) : (
-                                <>
-                                    <option value="">Select workspace…</option>
-                                    <option value="TE_AM_CONNECT" style={{ color: '#9CA3AF' }}>+ Connect Team Project</option>
-                                    {projects?.map((p: Project) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                                </>
-                            )}
-                        </select>
+                            onMouseEnter={e => { e.currentTarget.style.borderColor = '#444'; e.currentTarget.style.background = '#151515' }}
+                            onMouseLeave={e => { if (!projectDdOpen) { e.currentTarget.style.borderColor = isTeamWorkspace ? '#333' : '#222'; e.currentTarget.style.background = isTeamWorkspace ? '#111111' : '#111111' } }}
+                        >
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '20px', height: '20px', borderRadius: '6px', background: isTeamWorkspace ? 'rgba(16, 185, 129, 0.1)' : 'rgba(255,255,255,0.05)', color: isTeamWorkspace ? '#10b981' : '#6B7280' }}>
+                                {isTeamWorkspace ? (
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="2" y1="12" x2="22" y2="12" /><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" /></svg>
+                                ) : (
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 20v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>
+                                )}
+                            </div>
+                            <span style={{ fontSize: '13px', fontWeight: 600, flex: 1, truncate: 'true' as any }}>
+                                {isTeamWorkspace ? `Team: ${teamConfig?.projectId.slice(0, 8)}` : (projects?.find(p => p.id === currentProjectId)?.name || 'Select workspace…')}
+                            </span>
+                            <svg width="10" height="6" viewBox="0 0 10 6" fill="none" stroke="#6B7280" strokeWidth="1.5" strokeLinecap="round" style={{ transform: projectDdOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 200ms ease' }}>
+                                <path d="M1 1l4 4 4-4" />
+                            </svg>
+                        </button>
+
+                        {/* Floating Menu */}
+                        {projectDdOpen && (
+                            <div className="fade-in scale-in z-[3000]"
+                                style={{
+                                    position: 'absolute', top: '100%', left: '16px', right: '16px', marginTop: '8px',
+                                    background: '#111111', border: '1px solid #2A2A2A', borderRadius: '12px',
+                                    boxShadow: '0 12px 48px rgba(0,0,0,0.6)', padding: '6px',
+                                    animation: 'fadeUp 150ms ease'
+                                }}>
+                                
+                                {!isTeamWorkspace ? (
+                                    <>
+                                        <div style={{ padding: '6px 10px', fontSize: '9px', fontWeight: 800, color: '#444', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Connect</div>
+                                        <div onClick={() => { setShowTeamConnect(true); setProjectDdOpen(false) }}
+                                            className="group"
+                                            style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px', borderRadius: '8px', cursor: 'pointer', transition: '150ms ease' }}
+                                            onMouseEnter={e => e.currentTarget.style.background = '#1A1A1A'}
+                                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                                            <div style={{ width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '6px', background: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6' }}>
+                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                                            </div>
+                                            <span style={{ fontSize: '13px', fontWeight: 500, color: '#9CA3AF' }} className="group-hover:text-white">Connect Team Project</span>
+                                        </div>
+
+                                        <div style={{ height: '1px', background: '#1F1F1F', margin: '6px 4px' }} />
+                                        <div style={{ padding: '6px 10px', fontSize: '9px', fontWeight: 800, color: '#444', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Local Projects</div>
+                                        <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                                            {projects?.map(p => {
+                                                const isSel = p.id === currentProjectId
+                                                return (
+                                                    <div key={p.id} onClick={() => { selectProject(p.id); setProjectDdOpen(false) }}
+                                                        className="group"
+                                                        style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px', borderRadius: '8px', cursor: 'pointer', background: isSel ? 'rgba(255,255,255,0.03)' : 'transparent', transition: '150ms ease' }}
+                                                        onMouseEnter={e => e.currentTarget.style.background = isSel ? 'rgba(255,255,255,0.05)' : '#1A1A1A'}
+                                                        onMouseLeave={e => e.currentTarget.style.background = isSel ? 'rgba(255,255,255,0.03)' : 'transparent'}>
+                                                        <div style={{ width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '6px', background: isSel ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.05)', color: isSel ? '#FFF' : '#6B7280' }}>
+                                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /></svg>
+                                                        </div>
+                                                        <span style={{ fontSize: '13px', fontWeight: isSel ? 600 : 500, color: isSel ? '#FFF' : '#9CA3AF', flex: 1 }} className="group-hover:text-white">{p.name}</span>
+                                                        {isSel && <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#FFF' }} />}
+                                                    </div>
+                                                )
+                                            })}
+                                        </div>
+                                    </>
+                                ) : (
+                                    <>
+                                        <div onClick={() => { setTeamWorkspace(false); setProjectDdOpen(false) }}
+                                            className="group"
+                                            style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px', borderRadius: '8px', cursor: 'pointer', transition: '150ms ease' }}
+                                            onMouseEnter={e => e.currentTarget.style.background = 'rgba(248, 113, 113, 0.1)'}
+                                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                                            <div style={{ width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '6px', background: 'rgba(248, 113, 113, 0.1)', color: '#f87171' }}>
+                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></svg>
+                                            </div>
+                                            <span style={{ fontSize: '13px', fontWeight: 500, color: '#f87171' }}>Exit Team Workspace</span>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        )}
+
                         {isTeamWorkspace && (
                             <div className="mt-2 px-2 flex items-center gap-2">
                                 <span className="flex h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
                                 <span style={{ fontSize: 'calc(9px * var(--font-scale))', fontWeight: 800, color: '#10b981', textTransform: 'uppercase', letterSpacing: '0.15em' }}>Team Live Mode</span>
                             </div>
                         )}
+                    </div>
                     </div>
                 </div>
 
@@ -457,17 +521,23 @@ function FolderItem({ folder, isOpen, isActive, activeApi, onToggle, onSelectApi
                                 onMouseLeave={e => { if (!isAct) e.currentTarget.style.background = 'transparent' }}
                                 onClick={() => onSelectApi(a.id, folder.id)} onContextMenu={e => onCtx(e, 'api', a.id)}>
 
-                                {/* Method badge — monochrome pill */}
-                                <span className="text-[10px] font-bold font-mono tracking-[0.05em] whitespace-nowrap"
-                                    style={{
-                                        padding: '2px 6px',
-                                        border: '1px solid #2A2A2A',
-                                        borderRadius: '999px',
-                                        color: '#FFFFFF',
-                                        lineHeight: 1
-                                    }}>
-                                    {a.method}
-                                </span>
+                                {/* Method badge — colored pill */}
+                                {(() => {
+                                    const colors = METHOD_COLORS[a.method] || METHOD_COLORS.GET
+                                    return (
+                                        <span className="text-[10px] font-bold font-mono tracking-[0.05em] whitespace-nowrap"
+                                            style={{
+                                                padding: '2px 8px',
+                                                background: colors.bg,
+                                                border: `1px solid ${colors.border}`,
+                                                borderRadius: '999px',
+                                                color: colors.text,
+                                                lineHeight: 1
+                                            }}>
+                                            {a.method}
+                                        </span>
+                                    )
+                                })()}
 
                                 <span className="text-[13px] font-medium truncate"
                                     style={{ color: isAct ? '#FFFFFF' : '#9CA3AF', transition: '150ms ease' }}>
