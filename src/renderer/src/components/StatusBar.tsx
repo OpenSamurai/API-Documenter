@@ -1,7 +1,13 @@
 import { useAppStore } from '@/stores/appStore'
+import { useEffect, useState } from 'react'
 
 export function StatusBar() {
     const { setShowCookieManager, isOnline, proxyConnection } = useAppStore()
+    const [version, setVersion] = useState<string>('')
+
+    useEffect(() => {
+        (window as any).electronAPI.getAppVersion().then(setVersion)
+    }, [])
 
     return (
         <div style={{
@@ -59,7 +65,7 @@ export function StatusBar() {
                 >
                     Cookies
                 </button>
-                <span style={{ opacity: 0.5 }}>v1.0.21</span>
+                <span style={{ opacity: 0.5 }}>{version}</span>
             </div>
         </div>
     )

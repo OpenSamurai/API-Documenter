@@ -1,6 +1,6 @@
 {
   "name": "api-documenter",
-  "version": "1.0.21",
+  "version": "1.0.22",
   "description": "Self-hosted Postman alternative with folder-level RBAC and offline-first documentation",
   "main": "./out/main/index.js",
   "author": "Praneeth Kulukuri",
