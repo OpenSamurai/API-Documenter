@@ -58,6 +58,16 @@ export interface ElectronAPI {
     exportPdf: (html: string, fileName: string) => Promise<void>
     generateDocPdf: (markdown: string, fileName: string) => Promise<{ success: boolean; error?: string }>
     previewDocPdf: (markdown: string) => Promise<{ success: boolean; data?: Uint8Array; error?: string }>
+    // Cookies
+    getAllCookies: () => Promise<Record<string, any[]>>
+    setCookieManually: (domain: string, cookie: { name: string, value: string, path?: string }) => Promise<void>
+    deleteCookie: (url: string, name: string) => Promise<void>
+    clearDomainCookies: (domain: string) => Promise<void>
+    clearAllCookies: () => Promise<void>
+    getCookieWhitelist: () => Promise<string[]>
+    addToWhitelist: (domain: string) => Promise<void>
+    removeFromWhitelist: (domain: string) => Promise<void>
+    updateCookieRaw: (domain: string, rawString: string, oldName?: string) => Promise<void>
 }
 
 const electronAPI: ElectronAPI = {
@@ -104,7 +114,17 @@ const electronAPI: ElectronAPI = {
     platform: process.platform,
     exportPdf: (html, fileName) => ipcRenderer.invoke('export-pdf', html, fileName),
     generateDocPdf: (markdown, fileName) => ipcRenderer.invoke('generate-doc-pdf', markdown, fileName),
-    previewDocPdf: (markdown) => ipcRenderer.invoke('preview-doc-pdf', markdown)
+    previewDocPdf: (markdown) => ipcRenderer.invoke('preview-doc-pdf', markdown),
+    // Cookies
+    getAllCookies: () => ipcRenderer.invoke('get-all-cookies'),
+    setCookieManually: (domain, cookie) => ipcRenderer.invoke('set-cookie-manually', domain, cookie),
+    deleteCookie: (url, name) => ipcRenderer.invoke('delete-cookie', url, name),
+    clearDomainCookies: (domain) => ipcRenderer.invoke('clear-domain-cookies', domain),
+    clearAllCookies: () => ipcRenderer.invoke('clear-all-cookies'),
+    getCookieWhitelist: () => ipcRenderer.invoke('get-cookie-whitelist'),
+    addToWhitelist: (domain) => ipcRenderer.invoke('add-to-whitelist', domain),
+    removeFromWhitelist: (domain) => ipcRenderer.invoke('remove-from-whitelist', domain),
+    updateCookieRaw: (domain, rawString, oldName) => ipcRenderer.invoke('update-cookie-raw', domain, rawString, oldName)
 }
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI)

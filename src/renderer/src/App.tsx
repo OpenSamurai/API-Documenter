@@ -16,6 +16,8 @@ import { DeployProxyDialog } from './components/DeployProxyDialog'
 import { GeneralSettingsDialog } from './components/GeneralSettingsDialog'
 import { EnvironmentsDialog } from './components/EnvironmentsDialog'
 import { UpdaterNotifier } from './components/UpdaterNotifier'
+import { StatusBar } from './components/StatusBar'
+import { CookieManagerDialog } from './components/CookieManagerDialog'
 import { ApiDocumentationPage } from '@/components/ApiDocumentationPage'
 
 export function App() {
@@ -24,7 +26,7 @@ export function App() {
         isOnline, setIsOnline,
         showCreateProject, showCreateFolder, showCreateApi, showTeamConnect,
         showDatabaseSettings, showRbacSettings, showDeploySettings, showGeneralSettings,
-        showApiDocumentation
+        showApiDocumentation, showCookieManager, setShowCookieManager
     } = useAppStore()
     const { data: projects } = useProjects()
 
@@ -88,6 +90,12 @@ export function App() {
                     )}
                 </main>
             </div>
+
+            {/* Global Status Bar */}
+            <StatusBar />
+
+            {/* Global Cookie Manager */}
+            <CookieManagerDialog isOpen={showCookieManager} onClose={() => setShowCookieManager(false)} />
 
             {/* Global Sync Overlay */}
             {isSyncing && (

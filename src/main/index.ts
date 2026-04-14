@@ -7,6 +7,7 @@ import pg from 'pg'
 import { spawn } from 'child_process'
 import { autoUpdater } from 'electron-updater'
 import { sendHttpRequest } from './requestHandler'
+import { cookieStore } from './cookieStore'
 import { exportHtmlToPdf ,generateMarkdownToPdf,previewMarkdownToPdf} from './pdfHandler'
 
 let mainWindow: BrowserWindow | null = null
@@ -118,6 +119,43 @@ ipcMain.handle('generate-doc-pdf', async (_event, markdownContent, fileName) => 
 // HTTP Request Handler
 ipcMain.handle('send-http-request', async (_event, opts: any) => {
     return await sendHttpRequest(opts)
+})
+
+// Cookie Management
+ipcMain.handle('get-all-cookies', async () => {
+    return await cookieStore.getAllCookiesByDomain()
+})
+
+ipcMain.handle('set-cookie-manually', async (_event, domain: string, cookie: any) => {
+    return await cookieStore.addCookieManually(domain, cookie)
+})
+
+ipcMain.handle('update-cookie-raw', async (_event, domain: string, rawString: string, oldName?: string) => {
+    return await cookieStore.updateCookieFromRaw(domain, rawString, oldName)
+})
+
+ipcMain.handle('delete-cookie', async (_event, url: string, name: string) => {
+    return await cookieStore.deleteCookie(url, name)
+})
+
+ipcMain.handle('clear-domain-cookies', async (_event, domain: string) => {
+    return await cookieStore.clearDomainCookies(domain)
+})
+
+ipcMain.handle('clear-all-cookies', async () => {
+    return await cookieStore.clearAllCookies()
+})
+
+ipcMain.handle('get-cookie-whitelist', async () => {
+    return cookieStore.getWhitelist()
+})
+
+ipcMain.handle('add-to-whitelist', async (_event, domain: string) => {
+    return cookieStore.addToWhitelist(domain)
+})
+
+ipcMain.handle('remove-from-whitelist', async (_event, domain: string) => {
+    return cookieStore.removeFromWhitelist(domain)
 })
 
 // Remote DB Management

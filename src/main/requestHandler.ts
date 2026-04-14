@@ -1,6 +1,7 @@
 import { request, FormData, Agent, setGlobalDispatcher, interceptors } from 'undici'
 import fs from 'fs'
 import path from 'path'
+import { cookieStore } from './cookieStore'
 
 // Global connection pool (huge perf win)
 const agent = new Agent({
@@ -43,6 +44,12 @@ export async function sendHttpRequest(opts: HttpRequestOptions): Promise<HttpRes
         const url = new URL(opts.url)
         const method = opts.method.toUpperCase() as any
         const headers: Record<string, string> = { ...opts.headers }
+
+        // ── COOKIE INJECTION ──
+        const cookieString = await cookieStore.getCookieString(opts.url)
+        if (cookieString) {
+            headers['Cookie'] = cookieString
+        }
 
         let requestBody: any = opts.body
 
@@ -93,6 +100,12 @@ export async function sendHttpRequest(opts: HttpRequestOptions): Promise<HttpRes
                 })
             ) as any
         })
+
+        // ── COOKIE CAPTURING ──
+        const setCookieHeader = resHeaders['set-cookie']
+        if (setCookieHeader) {
+            await cookieStore.setCookie(opts.url, setCookieHeader)
+        }
 
         const bodyText = await body.text()
         const elapsed = Math.round(performance.now() - start)

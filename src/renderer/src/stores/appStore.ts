@@ -26,6 +26,7 @@ interface AppState {
     showTeamConnect: boolean
     showEnvironmentsDialog: boolean
     showApiDocumentation: boolean
+    showCookieManager: boolean
     editingFolderId: string | null
 
     // Team Workspace Mode
@@ -59,6 +60,7 @@ interface AppState {
     setShowGeneralSettings: (show: boolean) => void
     setShowTeamConnect: (show: boolean) => void
     setShowApiDocumentation: (show: boolean) => void
+    setShowCookieManager: (show: boolean) => void
     setEditingFolderId: (id: string | null) => void
     setProxyConnection: (conn: ProxyConnection | null) => void
     setIsSyncing: (isSyncing: boolean) => void
@@ -85,6 +87,7 @@ export const useAppStore = create<AppState>((set) => ({
     showTeamConnect: false,
     showEnvironmentsDialog: false,
     showApiDocumentation: false,
+    showCookieManager: false,
     editingFolderId: null,
     isSyncing: false,
     proxyConnection: null,
@@ -121,6 +124,7 @@ export const useAppStore = create<AppState>((set) => ({
     setShowGeneralSettings: (show) => set({ showGeneralSettings: show }),
     setShowTeamConnect: (show) => set({ showTeamConnect: show }),
     setShowApiDocumentation: (show) => set({ showApiDocumentation: show }),
+    setShowCookieManager: (show) => set({ showCookieManager: show }),
     setEditingFolderId: (id) => set({ editingFolderId: id }),
     setProxyConnection: (conn) => set({ proxyConnection: conn }),
     setIsSyncing: (isSyncing) => set({ isSyncing }),

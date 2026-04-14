@@ -606,7 +606,7 @@ export function RequestEditor({ apiId }: Props) {
                             style={{ fontSize: '10px', fontWeight: 500, padding: '4px 8px', borderRadius: '4px', color: '#6B7280', transition: '150ms ease', border: 'none', background: 'transparent', cursor: 'pointer' }}
                             onMouseEnter={e => { e.currentTarget.style.color = '#FFFFFF'; e.currentTarget.style.background = '#1A1A1A' }}
                             onMouseLeave={e => { e.currentTarget.style.color = '#6B7280'; e.currentTarget.style.background = 'transparent' }}>
-                            Collapse ⌘J
+                            Collapse Ctrl+J
                         </button>
                     </div>
                     <div style={{ flex: 1, overflowY: 'auto', padding: '20px', scrollBehavior: 'smooth' }}>
@@ -622,22 +622,16 @@ export function RequestEditor({ apiId }: Props) {
                     onMouseEnter={e => { e.currentTarget.style.color = '#FFFFFF' }}
                     onMouseLeave={e => { e.currentTarget.style.color = '#6B7280' }}>
                     <svg width="8" height="5" viewBox="0 0 8 5" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"><polyline points="1,4 4,1 7,4" /></svg>
-                    Show Response {liveResponse?.status ? `· ${liveResponse.status} ${liveResponse.statusText} · ${liveResponse.time}ms` : ''}
+                    Show Response {liveResponse?.status ? `[${liveResponse.status}] ${liveResponse.statusText} - ${liveResponse.time}ms` : ''}
                 </button>
             )}
 
-            {/* ── Status bar ── */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0, fontSize: '10px', fontWeight: 500, padding: '6px 24px', borderTop: '1px solid #1F1F1F', color: '#6B7280', background: '#0A0A0A' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                    <span style={{ fontFamily: 'monospace' }}>v{api.version}</span>
-                    <span style={{ color: '#2A2A2A' }}>·</span>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#FFFFFF', opacity: api.syncStatus === 'synced' ? 1 : 0.3 }} />
-                        {api.syncStatus}
-                    </span>
-                </div>
+            {/* Editor-specific info bar (Minimal) */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', flexShrink: 0, fontSize: '10px', fontWeight: 500, padding: '6px 24px', borderTop: '1px solid #1F1F1F', color: '#6B7280', background: '#0A0A0A' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    {!saved && <span style={{ color: '#FFFFFF' }}>● Unsaved</span>}
+                    <span style={{ fontFamily: 'monospace' }}>v{api.version || 0}</span>
+                    <span style={{ color: '#2A2A2A' }}>|</span>
+                    {!saved && <span style={{ color: '#FFFFFF' }}>* Unsaved</span>}
                     <kbd style={{ padding: '1px 6px', borderRadius: '4px', fontSize: '9px', fontFamily: 'monospace', border: '1px solid #2A2A2A', color: '#6B7280' }}>Ctrl+S</kbd>
                 </div>
             </div>
