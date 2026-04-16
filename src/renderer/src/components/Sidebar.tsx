@@ -89,7 +89,7 @@ export function Sidebar() {
 
     return (
         <>
-            <aside className="fade-in" style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '260px', background: '#0A0A0A', borderRight: '1px solid #1F1F1F' }}>
+            <aside className="fade-in" style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '300px', background: '#0A0A0A', borderRight: '1px solid #1F1F1F' }}>
 
                 {/* ═══ Brand header ═══ */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px', flexShrink: 0, height: '52px', borderBottom: '1px solid #1A1A1A' }}>
@@ -104,13 +104,24 @@ export function Sidebar() {
                         </button>
                         <span style={{ fontSize: 'calc(13px * var(--font-scale))', fontWeight: 600, color: 'white', letterSpacing: '-0.01em' }}>API Documenter</span>
                     </div>
+                    {currentProjectId && (
+                        <button onClick={() => selectProject(null)} className="rounded-lg group"
+                            style={{ width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6B7280', transition: '150ms ease' }}
+                            onMouseEnter={e => { e.currentTarget.style.background = '#151515'; e.currentTarget.style.color = '#FFFFFF' }}
+                            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#6B7280' }}
+                            title="Go to Home">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                                <polyline points="9 22 9 12 15 12 15 22" />
+                            </svg>
+                        </button>
+                    )}
                 </div>
 
                 {/* ═══ PROJECT section ═══ */}
                 <div style={{ flexShrink: 0, borderBottom: '1px solid #1A1A1A' }}>
                     <p style={{ padding: '20px 20px 10px 20px', color: '#444', margin: 0, fontSize: 'calc(9px * var(--font-scale))', letterSpacing: '0.15em', textTransform: 'uppercase', fontWeight: 800 }}>Project Workspace</p>
-                    <div style={{ padding: '0 16px 20px 16px' }}>
-                    <div style={{ padding: '0 16px 20px 16px', position: 'relative' }}>
+                    <div style={{ padding: '0 12px 16px 12px', position: 'relative' }}>
                         {/* Custom Dropdown Trigger */}
                         <button
                             onClick={(e) => { e.stopPropagation(); setProjectDdOpen(!projectDdOpen) }}
@@ -143,13 +154,13 @@ export function Sidebar() {
 
                         {/* Floating Menu */}
                         {projectDdOpen && (
-                            <div className="fade-in scale-in z-[3000]"
-                                style={{
-                                    position: 'absolute', top: '100%', left: '16px', right: '16px', marginTop: '8px',
-                                    background: '#111111', border: '1px solid #2A2A2A', borderRadius: '12px',
-                                    boxShadow: '0 12px 48px rgba(0,0,0,0.6)', padding: '6px',
-                                    animation: 'fadeUp 150ms ease'
-                                }}>
+                                <div className="fade-in scale-in z-[3000]"
+                                    style={{
+                                        position: 'absolute', top: '100%', left: '0', right: '0', marginTop: '8px',
+                                        background: '#111111', border: '1px solid #2A2A2A', borderRadius: '12px',
+                                        boxShadow: '0 12px 48px rgba(0,0,0,0.6)', padding: '6px',
+                                        animation: 'fadeUp 150ms ease'
+                                    }}>
                                 
                                 {!isTeamWorkspace ? (
                                     <>
@@ -185,6 +196,22 @@ export function Sidebar() {
                                                 )
                                             })}
                                         </div>
+
+                                        {currentProjectId && (
+                                            <>
+                                                <div style={{ height: '1px', background: '#1F1F1F', margin: '6px 4px' }} />
+                                                <div onClick={() => { selectProject(null); setProjectDdOpen(false) }}
+                                                    className="group"
+                                                    style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px', borderRadius: '8px', cursor: 'pointer', transition: '150ms ease' }}
+                                                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(248, 113, 113, 0.1)'}
+                                                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                                                    <div style={{ width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '6px', background: 'rgba(248, 113, 113, 0.1)', color: '#f87171' }}>
+                                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12" /></svg>
+                                                    </div>
+                                                    <span style={{ fontSize: '13px', fontWeight: 500, color: '#f87171' }}>Close Project</span>
+                                                </div>
+                                            </>
+                                        )}
                                     </>
                                 ) : (
                                     <>
@@ -209,7 +236,6 @@ export function Sidebar() {
                                 <span style={{ fontSize: 'calc(9px * var(--font-scale))', fontWeight: 800, color: '#10b981', textTransform: 'uppercase', letterSpacing: '0.15em' }}>Team Live Mode</span>
                             </div>
                         )}
-                    </div>
                     </div>
                 </div>
 

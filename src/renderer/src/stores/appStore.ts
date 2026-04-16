@@ -97,7 +97,7 @@ export const useAppStore = create<AppState>((set) => ({
     environments: [],
     currentEnvironmentId: null,
 
-    selectProject: (id) => set({ currentProjectId: id, currentFolderId: null, currentApiId: null }),
+    selectProject: (id) => set({ currentProjectId: id, currentFolderId: null, currentApiId: null, showApiDocumentation: false }),
     selectFolder: (id) => set({ currentFolderId: id }),
     selectApi: (apiId: string | null, folderId?: string) => set((s) => ({
         currentApiId: apiId,
@@ -133,6 +133,7 @@ export const useAppStore = create<AppState>((set) => ({
         teamConfig: config || null,
         currentProjectId: config?.projectId || null,
         currentFolderId: null,
-        currentApiId: null
+        currentApiId: null,
+        showApiDocumentation: false
     }),
 }))
