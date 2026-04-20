@@ -6,11 +6,22 @@ import mysql from 'mysql2/promise'
 import pg from 'pg'
 import { spawn } from 'child_process'
 import { autoUpdater } from 'electron-updater'
+import ElectronStore from 'electron-store'
 import { sendHttpRequest } from './requestHandler'
 import { cookieStore } from './cookieStore'
 import { exportHtmlToPdf ,generateMarkdownToPdf,previewMarkdownToPdf} from './pdfHandler'
+import {
+    initProjectDirectory, writeProjectMeta, writeProjectSecrets,
+    writeFolderMeta, renameFolderDir, deleteFolderDir,
+    writeApiFile, deleteApiFile,
+    writeEnvironmentFile, deleteEnvironmentFile,
+    readProjectFromDisk, writeFullProjectToDisk
+} from './fileSystemManager'
+import { fileWatcherManager } from './fileWatcher'
+import { GitManager } from './gitManager'
 
 let mainWindow: BrowserWindow | null = null
+const store = new ElectronStore()
 
 function createWindow(): void {
     mainWindow = new BrowserWindow({
@@ -751,6 +762,166 @@ ipcMain.handle('delete-vercel-project', async (_event, params: { projectId: stri
 
         child.on('error', (err) => resolve({ success: false, error: err.message, output }))
     })
+})
+
+// ─── File System IPC Handlers ───────────────────────────────────────
+
+ipcMain.handle('init-project-directory', async (_event, dirPath: string, projectData: any) => {
+    fileWatcherManager.pause()
+    const res = initProjectDirectory(dirPath, projectData)
+    fileWatcherManager.resume()
+    return res
+})
+
+ipcMain.handle('write-project-meta', async (_event, dirPath: string, projectData: any) => {
+    fileWatcherManager.pause()
+    const res = writeProjectMeta(dirPath, projectData)
+    fileWatcherManager.resume()
+    return res
+})
+
+ipcMain.handle('write-project-secrets', async (_event, dirPath: string, secrets: any) => {
+    fileWatcherManager.pause()
+    const res = writeProjectSecrets(dirPath, secrets)
+    fileWatcherManager.resume()
+    return res
+})
+
+ipcMain.handle('write-folder-meta', async (_event, dirPath: string, folderData: any) => {
+    fileWatcherManager.pause()
+    const res = writeFolderMeta(dirPath, folderData)
+    fileWatcherManager.resume()
+    return res
+})
+
+ipcMain.handle('rename-folder-dir', async (_event, dirPath: string, folderId: string, newName: string) => {
+    fileWatcherManager.pause()
+    const res = renameFolderDir(dirPath, folderId, newName)
+    fileWatcherManager.resume()
+    return res
+})
+
+ipcMain.handle('delete-folder-dir', async (_event, dirPath: string, folderId: string) => {
+    fileWatcherManager.pause()
+    const res = deleteFolderDir(dirPath, folderId)
+    fileWatcherManager.resume()
+    return res
+})
+
+ipcMain.handle('write-api-file', async (_event, dirPath: string, folderId: string, apiData: any) => {
+    fileWatcherManager.pause()
+    const res = writeApiFile(dirPath, folderId, apiData)
+    fileWatcherManager.resume()
+    return res
+})
+
+ipcMain.handle('delete-api-file', async (_event, dirPath: string, folderId: string, apiId: string) => {
+    fileWatcherManager.pause()
+    const res = deleteApiFile(dirPath, folderId, apiId)
+    fileWatcherManager.resume()
+    return res
+})
+
+ipcMain.handle('write-environment-file', async (_event, dirPath: string, envData: any) => {
+    fileWatcherManager.pause()
+    const res = writeEnvironmentFile(dirPath, envData)
+    fileWatcherManager.resume()
+    return res
+})
+
+ipcMain.handle('delete-environment-file', async (_event, dirPath: string, envId: string) => {
+    fileWatcherManager.pause()
+    const res = deleteEnvironmentFile(dirPath, envId)
+    fileWatcherManager.resume()
+    return res
+})
+
+ipcMain.handle('read-project-from-disk', async (_event, dirPath: string) => {
+    return readProjectFromDisk(dirPath)
+})
+
+ipcMain.handle('write-full-project-to-disk', async (_event, dirPath: string, data: any) => {
+    fileWatcherManager.pause()
+    const res = writeFullProjectToDisk(dirPath, data)
+    fileWatcherManager.resume()
+    return res
+})
+
+ipcMain.handle('get-recent-projects', async () => {
+    return store.get('recentProjects', []) as any[]
+})
+
+ipcMain.handle('add-recent-project', async (_event, project: { id: string; name: string; localPath: string }) => {
+    const recent = (store.get('recentProjects', []) as any[])
+    // Remove existing entry with same id
+    const filtered = recent.filter((p: any) => p.id !== project.id)
+    // Add to front
+    filtered.unshift({ id: project.id, name: project.name, localPath: project.localPath, lastOpenedAt: Date.now() })
+    // Keep max 20
+    store.set('recentProjects', filtered.slice(0, 20))
+    return { success: true }
+})
+
+ipcMain.handle('remove-recent-project', async (_event, projectId: string) => {
+    const recent = (store.get('recentProjects', []) as any[])
+    store.set('recentProjects', recent.filter((p: any) => p.id !== projectId))
+    return { success: true }
+})
+
+ipcMain.handle('open-in-explorer', async (_event, dirPath: string) => {
+    shell.openPath(dirPath)
+    return { success: true }
+})
+
+// File Watcher Controls
+ipcMain.handle('start-file-watcher', async (_event, dirPath: string) => {
+    if (mainWindow) {
+        fileWatcherManager.start(dirPath, mainWindow)
+    }
+    return { success: true }
+})
+
+ipcMain.handle('stop-file-watcher', async () => {
+    fileWatcherManager.stop()
+    return { success: true }
+})
+
+// ─── Git Operations ──────────────────────────────────────────────────
+ipcMain.handle('git-status', async (_event, dirPath: string) => {
+    const git = new GitManager(dirPath)
+    return await git.getStatus()
+})
+ipcMain.handle('git-add', async (_event, dirPath: string, filePaths: string | string[]) => {
+    const git = new GitManager(dirPath)
+    return await git.add(filePaths)
+})
+ipcMain.handle('git-unstage', async (_event, dirPath: string, filePaths: string | string[]) => {
+    const git = new GitManager(dirPath)
+    return await git.unstage(filePaths)
+})
+ipcMain.handle('git-commit', async (_event, dirPath: string, message: string) => {
+    const git = new GitManager(dirPath)
+    return await git.commit(message)
+})
+ipcMain.handle('git-discard', async (_event, dirPath: string, filePaths: string | string[]) => {
+    const git = new GitManager(dirPath)
+    return await git.discard(filePaths)
+})
+ipcMain.handle('git-branches', async (_event, dirPath: string) => {
+    const git = new GitManager(dirPath)
+    return await git.getBranches()
+})
+ipcMain.handle('git-checkout-branch', async (_event, dirPath: string, branchName: string) => {
+    const git = new GitManager(dirPath)
+    return await git.checkoutBranch(branchName)
+})
+ipcMain.handle('git-create-branch', async (_event, dirPath: string, branchName: string) => {
+    const git = new GitManager(dirPath)
+    return await git.createBranch(branchName)
+})
+ipcMain.handle('git-logs', async (_event, dirPath: string) => {
+    const git = new GitManager(dirPath)
+    return await git.getLogs()
 })
 
 // Auto-Updater Configuration

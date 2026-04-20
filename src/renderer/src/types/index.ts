@@ -46,6 +46,7 @@ export interface ResponseExample {
 export interface Project {
     id: string
     name: string
+    localPath: string
     databaseUrl?: string
     proxyUrl?: string
     lastDeployedAt?: number

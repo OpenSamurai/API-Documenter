@@ -5,6 +5,7 @@ import { v4 as uuid } from 'uuid'
 import { useAppStore } from '@/stores/appStore'
 import { performSync } from './useSync'
 import { mapRemoteApi } from '@/utils/remoteMapper'
+import { getProjectLocalPath, fireAndForgetFileWrite } from '@/utils/fileSync'
 
 export function useApis(folderId: string | null) {
     const { isTeamWorkspace, teamConfig } = useAppStore()
@@ -184,6 +185,14 @@ export function useCreateApi() {
             }
             await db.apiCollections.add(api)
 
+            // Write .apidoc file to disk
+            const localPath = await getProjectLocalPath(data.projectId)
+            if (localPath) {
+                fireAndForgetFileWrite('writeApiFile', () =>
+                    (window as any).electronAPI.writeApiFile(localPath, api.folderId, api)
+                )
+            }
+
             // Queue sync
             await db.syncQueue.add({
                 id: uuid(),
@@ -252,6 +261,16 @@ export function useUpdateApi() {
             await db.apiCollections.update(id, { ...data, version: (data.version || 1) })
             const api = await db.apiCollections.get(id)
 
+            // Write updated .apidoc file to disk
+            if (api) {
+                const localPath = await getProjectLocalPath(api.projectId)
+                if (localPath) {
+                    fireAndForgetFileWrite('writeApiFile', () =>
+                        (window as any).electronAPI.writeApiFile(localPath, api.folderId, api)
+                    )
+                }
+            }
+
             // Queue sync
             if (api) {
                 await db.syncQueue.add({
@@ -305,6 +324,14 @@ export function useDeleteApi() {
 
             const api = await db.apiCollections.get(id)
             if (!api) return null
+
+            // Delete .apidoc file from disk
+            const localPath = await getProjectLocalPath(api.projectId)
+            if (localPath) {
+                fireAndForgetFileWrite('deleteApiFile', () =>
+                    (window as any).electronAPI.deleteApiFile(localPath, api.folderId, api.id)
+                )
+            }
 
             await db.transaction('rw', [db.apiCollections, db.syncQueue], async () => {
                 await db.apiCollections.delete(id)

@@ -35,6 +35,15 @@ class ApiDocumenterDB extends Dexie {
             environments: 'id, projectId, folderId, name, isGlobal, syncStatus, createdAt'
         })
 
+        this.version(5).stores({
+            projects: 'id, name, localPath, createdAt',
+            folders: 'id, projectId, name, orderIndex, syncStatus, createdAt',
+            apiCollections: 'id, projectId, folderId, name, method, syncStatus, createdAt',
+            syncQueue: 'id, localId, projectId, tableName, status, createdAt',
+            teamConnections: 'id, name, url, projectId, lastUsedAt',
+            environments: 'id, projectId, folderId, name, isGlobal, syncStatus, createdAt'
+        })
+
     }
 }
 

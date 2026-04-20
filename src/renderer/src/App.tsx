@@ -2,8 +2,11 @@ import { useEffect } from 'react'
 import { useAppStore } from '@/stores/appStore'
 import { useProjects } from '@/hooks/useProjects'
 import { useSync } from '@/hooks/useSync'
+import { useProjectFilesWatcher } from '@/hooks/useFileWatcher'
 import { Titlebar } from './components/Titlebar'
+import { ActivityBar } from './components/ActivityBar'
 import { Sidebar } from './components/Sidebar'
+import { GitSidebar } from './components/GitSidebar'
 import { RequestEditor } from './components/RequestEditor'
 import { EmptyState } from './components/EmptyState'
 import { CreateProjectDialog } from './components/CreateProjectDialog'
@@ -26,7 +29,8 @@ export function App() {
         isOnline, setIsOnline,
         showCreateProject, showCreateFolder, showCreateApi, showTeamConnect,
         showDatabaseSettings, showRbacSettings, showDeploySettings, showGeneralSettings,
-        showApiDocumentation, showCookieManager, setShowCookieManager
+        showApiDocumentation, showCookieManager, setShowCookieManager,
+        activeSidebarTab
     } = useAppStore()
     const { data: projects } = useProjects()
 
@@ -40,6 +44,8 @@ export function App() {
             window.removeEventListener('offline', handleOffline)
         }
     }, [setIsOnline])
+
+    useProjectFilesWatcher(currentProjectId)
 
     const { syncNow } = useSync()
     const { proxyConnection, isSyncing, setIsSyncing } = useAppStore()
@@ -76,8 +82,11 @@ export function App() {
 
             {/* Main content below titlebar */}
             <div style={{ display: 'flex', flex: 1, overflow: 'hidden', marginTop: 'var(--topbar-h)' }}>
+                {/* Activity Bar */}
+                <ActivityBar />
+
                 {/* Sidebar */}
-                <Sidebar />
+                {activeSidebarTab === 'explorer' ? <Sidebar /> : <GitSidebar />}
 
                 {/* Editor area */}
                 <main style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', position: 'relative' }}>

@@ -13,6 +13,7 @@ interface AppState {
     sidebarWidth: number
     activeEditorTab: EditorTab
     isSidebarCollapsed: boolean
+    activeSidebarTab: 'explorer' | 'git'
     isSyncing: boolean
 
     // Dialog state
@@ -51,6 +52,7 @@ interface AppState {
     setShowEnvironmentsDialog: (show: boolean) => void
     setActiveEditorTab: (tab: EditorTab) => void
     toggleSidebar: () => void
+    setActiveSidebarTab: (tab: 'explorer' | 'git') => void
     setShowCreateProject: (show: boolean) => void
     setShowCreateFolder: (show: boolean) => void
     setShowCreateApi: (show: boolean) => void
@@ -76,6 +78,7 @@ export const useAppStore = create<AppState>((set) => ({
     sidebarWidth: 300,
     activeEditorTab: 'params',
     isSidebarCollapsed: false,
+    activeSidebarTab: 'explorer',
 
     showCreateProject: false,
     showCreateFolder: false,
@@ -115,6 +118,7 @@ export const useAppStore = create<AppState>((set) => ({
     setShowEnvironmentsDialog: (show) => set({ showEnvironmentsDialog: show }),
     setActiveEditorTab: (tab) => set({ activeEditorTab: tab }),
     toggleSidebar: () => set((s) => ({ isSidebarCollapsed: !s.isSidebarCollapsed })),
+    setActiveSidebarTab: (tab) => set({ activeSidebarTab: tab }),
     setShowCreateProject: (show) => set({ showCreateProject: show }),
     setShowCreateFolder: (show) => set({ showCreateFolder: show }),
     setShowCreateApi: (show) => set({ showCreateApi: show }),

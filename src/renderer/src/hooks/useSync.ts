@@ -2,6 +2,7 @@ import { useQueryClient, QueryClient } from '@tanstack/react-query'
 import { db } from '@/db'
 import { useAppStore } from '@/stores/appStore'
 import type { ProxyConnection } from '@/types'
+import { getProjectLocalPath, fireAndForgetFileWrite } from '@/utils/fileSync'
 
 export async function performSync(qc: QueryClient, proxyConnection: ProxyConnection | null, projectId: string | null, isTeam: boolean = false) {
     if (!projectId) return { success: false, error: 'No project ID' }
@@ -214,6 +215,30 @@ export async function performSync(qc: QueryClient, proxyConnection: ProxyConnect
 
         try {
             await pullRemote()
+
+            // ─── FILE SYSTEM FLUSH: Write pulled data to disk ───
+            const localPath = await getProjectLocalPath(projectId)
+            if (localPath) {
+                const allFolders = await db.folders.where('projectId').equals(projectId).toArray()
+                const allApis = await db.apiCollections.where('projectId').equals(projectId).toArray()
+                const allEnvs = await db.environments.where('projectId').equals(projectId).toArray()
+
+                fireAndForgetFileWrite('syncFlushToDisk', async () => {
+                    // Write each folder
+                    for (const f of allFolders) {
+                        await (window as any).electronAPI.writeFolderMeta(localPath, f)
+                    }
+                    // Write each API
+                    for (const a of allApis) {
+                        await (window as any).electronAPI.writeApiFile(localPath, a.folderId, a)
+                    }
+                    // Write each environment
+                    for (const e of allEnvs) {
+                        await (window as any).electronAPI.writeEnvironmentFile(localPath, e)
+                    }
+                    return { success: true }
+                })
+            }
         } catch (pullError) {
             console.error('[Sync] Pull phase failed:', pullError)
         }

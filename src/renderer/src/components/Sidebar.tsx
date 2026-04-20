@@ -359,6 +359,10 @@ export function Sidebar() {
                                     {!isTeamWorkspace && (
                                         <ActionBtn icon="document" label="Generate API Docs" onClick={() => setShowApiDocumentation(true)} />
                                     )}
+
+                                    {p?.localPath && !isTeamWorkspace && (
+                                        <ActionBtn icon="folderOpen" label="Open in Explorer" onClick={() => (window as any).electronAPI.openInExplorer(p.localPath)} />
+                                    )}
                                 </div>
                             )}
                         </div>
@@ -607,7 +611,7 @@ function SyncAction({ currentProject }: { currentProject?: Project }) {
    ACTION BUTTON — bottom area
    ═══════════════════════════════════════════════════════════════════ */
 function ActionBtn({ icon, label, onClick, disabled, spin }: {
-    icon: 'folder' | 'plus' | 'globe' | 'users' | 'refresh' | 'database' | 'deploy' | 'settings' | 'document';
+    icon: 'folder' | 'plus' | 'globe' | 'users' | 'refresh' | 'database' | 'deploy' | 'settings' | 'document' | 'folderOpen';
     label: string;
     onClick: () => void;
     disabled?: boolean;
@@ -627,6 +631,10 @@ function ActionBtn({ icon, label, onClick, disabled, spin }: {
                 {icon === 'folder' ? (
                     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M2 4V11C2 11.6 2.4 12 3 12H11C11.6 12 12 11.6 12 11V5.5C12 4.9 11.6 4.5 11 4.5H7L5.5 3H3C2.4 3 2 3.4 2 4Z" />
+                    </svg>
+                ) : icon === 'folderOpen' ? (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
                     </svg>
                 ) : icon === 'globe' ? (
                     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">

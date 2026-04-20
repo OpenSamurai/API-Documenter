@@ -5,6 +5,7 @@ import { v4 as uuid } from 'uuid'
 import { useAppStore } from '@/stores/appStore'
 import { performSync } from './useSync'
 import { mapRemoteFolder } from '@/utils/remoteMapper'
+import { getProjectLocalPath, fireAndForgetFileWrite } from '@/utils/fileSync'
 
 export function useFolders(projectId: string | null) {
     const { isTeamWorkspace, teamConfig } = useAppStore()
@@ -123,6 +124,14 @@ export function useCreateFolder() {
             }
             await db.folders.add(folder)
 
+            // Write folder to disk
+            const localPath = await getProjectLocalPath(data.projectId)
+            if (localPath) {
+                fireAndForgetFileWrite('writeFolderMeta', () =>
+                    (window as any).electronAPI.writeFolderMeta(localPath, folder)
+                )
+            }
+
             // Queue sync
             await db.syncQueue.add({
                 id: uuid(),
@@ -176,8 +185,27 @@ export function useUpdateFolder() {
 
                 return { id, ...data } as Folder
             }
+
+            const oldFolder = await db.folders.get(id)
             await db.folders.update(id, data)
             const folder = await db.folders.get(id)
+
+            // Write to disk
+            if (folder) {
+                const localPath = await getProjectLocalPath(folder.projectId)
+                if (localPath) {
+                    // If name changed, rename the directory
+                    if (oldFolder && data.name && oldFolder.name !== data.name) {
+                        fireAndForgetFileWrite('renameFolderDir', () =>
+                            (window as any).electronAPI.renameFolderDir(localPath, folder.id, data.name!)
+                        )
+                    }
+                    // Update folder.json
+                    fireAndForgetFileWrite('writeFolderMeta', () =>
+                        (window as any).electronAPI.writeFolderMeta(localPath, folder)
+                    )
+                }
+            }
 
             // Queue sync
             if (folder) {
@@ -230,6 +258,14 @@ export function useDeleteFolder() {
             }
             const folder = await db.folders.get(id)
             if (!folder) return null
+
+            // Delete folder directory from disk
+            const localPath = await getProjectLocalPath(folder.projectId)
+            if (localPath) {
+                fireAndForgetFileWrite('deleteFolderDir', () =>
+                    (window as any).electronAPI.deleteFolderDir(localPath, folder.id)
+                )
+            }
 
             await db.transaction('rw', [db.folders, db.apiCollections, db.syncQueue], async () => {
                 await db.apiCollections.where('folderId').equals(id).delete()

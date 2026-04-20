@@ -68,6 +68,37 @@ export interface ElectronAPI {
     addToWhitelist: (domain: string) => Promise<void>
     removeFromWhitelist: (domain: string) => Promise<void>
     updateCookieRaw: (domain: string, rawString: string, oldName?: string) => Promise<void>
+    // File System
+    initProjectDirectory: (dirPath: string, projectData: any) => Promise<{ success: boolean; error?: string }>
+    writeProjectMeta: (dirPath: string, projectData: any) => Promise<{ success: boolean; error?: string }>
+    writeProjectSecrets: (dirPath: string, secrets: any) => Promise<{ success: boolean; error?: string }>
+    writeFolderMeta: (dirPath: string, folderData: any) => Promise<{ success: boolean; folderDirName?: string; error?: string }>
+    renameFolderDir: (dirPath: string, folderId: string, newName: string) => Promise<{ success: boolean; newDirName?: string; error?: string }>
+    deleteFolderDir: (dirPath: string, folderId: string) => Promise<{ success: boolean; error?: string }>
+    writeApiFile: (dirPath: string, folderId: string, apiData: any) => Promise<{ success: boolean; fileName?: string; error?: string }>
+    deleteApiFile: (dirPath: string, folderId: string, apiId: string) => Promise<{ success: boolean; error?: string }>
+    writeEnvironmentFile: (dirPath: string, envData: any) => Promise<{ success: boolean; fileName?: string; error?: string }>
+    deleteEnvironmentFile: (dirPath: string, envId: string) => Promise<{ success: boolean; error?: string }>
+    readProjectFromDisk: (dirPath: string) => Promise<{ success: boolean; project?: any; secrets?: any; folders?: any[]; apis?: any[]; environments?: any[]; error?: string }>
+    writeFullProjectToDisk: (dirPath: string, data: any) => Promise<{ success: boolean; error?: string }>
+    getRecentProjects: () => Promise<any[]>
+    addRecentProject: (project: { id: string; name: string; localPath: string }) => Promise<{ success: boolean }>
+    removeRecentProject: (projectId: string) => Promise<{ success: boolean }>
+    openInExplorer: (dirPath: string) => Promise<{ success: boolean }>
+    startFileWatcher: (dirPath: string) => Promise<{ success: boolean }>
+    stopFileWatcher: () => Promise<{ success: boolean }>
+    onProjectFilesChanged: (callback: (data: { dirPath: string }) => void) => () => void
+
+    // Git
+    gitStatus: (dirPath: string) => Promise<{ success: boolean; status?: any; error?: string }>
+    gitAdd: (dirPath: string, filePaths: string | string[]) => Promise<{ success: boolean; error?: string }>
+    gitUnstage: (dirPath: string, filePaths: string | string[]) => Promise<{ success: boolean; error?: string }>
+    gitCommit: (dirPath: string, message: string) => Promise<{ success: boolean; error?: string }>
+    gitDiscard: (dirPath: string, filePaths: string | string[]) => Promise<{ success: boolean; error?: string }>
+    gitBranches: (dirPath: string) => Promise<{ success: boolean; branches?: any; error?: string }>
+    gitCheckoutBranch: (dirPath: string, branchName: string) => Promise<{ success: boolean; error?: string }>
+    gitCreateBranch: (dirPath: string, branchName: string) => Promise<{ success: boolean; error?: string }>
+    gitLogs: (dirPath: string) => Promise<{ success: boolean; logs?: any; error?: string }>
 }
 
 const electronAPI: ElectronAPI = {
@@ -124,7 +155,41 @@ const electronAPI: ElectronAPI = {
     getCookieWhitelist: () => ipcRenderer.invoke('get-cookie-whitelist'),
     addToWhitelist: (domain) => ipcRenderer.invoke('add-to-whitelist', domain),
     removeFromWhitelist: (domain) => ipcRenderer.invoke('remove-from-whitelist', domain),
-    updateCookieRaw: (domain, rawString, oldName) => ipcRenderer.invoke('update-cookie-raw', domain, rawString, oldName)
+    updateCookieRaw: (domain, rawString, oldName) => ipcRenderer.invoke('update-cookie-raw', domain, rawString, oldName),
+    // File System
+    initProjectDirectory: (dirPath, projectData) => ipcRenderer.invoke('init-project-directory', dirPath, projectData),
+    writeProjectMeta: (dirPath, projectData) => ipcRenderer.invoke('write-project-meta', dirPath, projectData),
+    writeProjectSecrets: (dirPath, secrets) => ipcRenderer.invoke('write-project-secrets', dirPath, secrets),
+    writeFolderMeta: (dirPath, folderData) => ipcRenderer.invoke('write-folder-meta', dirPath, folderData),
+    renameFolderDir: (dirPath, folderId, newName) => ipcRenderer.invoke('rename-folder-dir', dirPath, folderId, newName),
+    deleteFolderDir: (dirPath, folderId) => ipcRenderer.invoke('delete-folder-dir', dirPath, folderId),
+    writeApiFile: (dirPath, folderId, apiData) => ipcRenderer.invoke('write-api-file', dirPath, folderId, apiData),
+    deleteApiFile: (dirPath, folderId, apiId) => ipcRenderer.invoke('delete-api-file', dirPath, folderId, apiId),
+    writeEnvironmentFile: (dirPath, envData) => ipcRenderer.invoke('write-environment-file', dirPath, envData),
+    deleteEnvironmentFile: (dirPath, envId) => ipcRenderer.invoke('delete-environment-file', dirPath, envId),
+    readProjectFromDisk: (dirPath) => ipcRenderer.invoke('read-project-from-disk', dirPath),
+    writeFullProjectToDisk: (dirPath, data) => ipcRenderer.invoke('write-full-project-to-disk', dirPath, data),
+    getRecentProjects: () => ipcRenderer.invoke('get-recent-projects'),
+    addRecentProject: (project) => ipcRenderer.invoke('add-recent-project', project),
+    removeRecentProject: (projectId) => ipcRenderer.invoke('remove-recent-project', projectId),
+    openInExplorer: (dirPath) => ipcRenderer.invoke('open-in-explorer', dirPath),
+    startFileWatcher: (dirPath) => ipcRenderer.invoke('start-file-watcher', dirPath),
+    stopFileWatcher: () => ipcRenderer.invoke('stop-file-watcher'),
+    onProjectFilesChanged: (callback) => {
+        const handler = (_event: any, data: { dirPath: string }) => callback(data)
+        ipcRenderer.on('project-files-changed', handler)
+        return () => ipcRenderer.removeListener('project-files-changed', handler)
+    },
+
+    gitStatus: (dirPath) => ipcRenderer.invoke('git-status', dirPath),
+    gitAdd: (dirPath, filePaths) => ipcRenderer.invoke('git-add', dirPath, filePaths),
+    gitUnstage: (dirPath, filePaths) => ipcRenderer.invoke('git-unstage', dirPath, filePaths),
+    gitCommit: (dirPath, message) => ipcRenderer.invoke('git-commit', dirPath, message),
+    gitDiscard: (dirPath, filePaths) => ipcRenderer.invoke('git-discard', dirPath, filePaths),
+    gitBranches: (dirPath) => ipcRenderer.invoke('git-branches', dirPath),
+    gitCheckoutBranch: (dirPath, branchName) => ipcRenderer.invoke('git-checkout-branch', dirPath, branchName),
+    gitCreateBranch: (dirPath, branchName) => ipcRenderer.invoke('git-create-branch', dirPath, branchName),
+    gitLogs: (dirPath) => ipcRenderer.invoke('git-logs', dirPath)
 }
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI)

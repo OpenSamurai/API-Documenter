@@ -4,6 +4,7 @@ import type { Project, Folder, ApiCollection } from '@/types'
 import { v4 as uuid } from 'uuid'
 import { performSync } from './useSync'
 import { useAppStore } from '@/stores/appStore'
+import { getProjectLocalPath, fireAndForgetFileWrite } from '@/utils/fileSync'
 
 export function useProjects() {
     return useQuery<Project[]>({
@@ -97,16 +98,31 @@ export async function triggerFullProjectSync(qc: any, project: Project) {
 export function useCreateProject() {
     const qc = useQueryClient()
     return useMutation({
-        mutationFn: async (data: { name: string; databaseUrl?: string; proxyUrl?: string }) => {
+        mutationFn: async (data: { name: string; localPath: string; databaseUrl?: string; proxyUrl?: string }) => {
             const project: Project = {
                 id: uuid(),
                 name: data.name,
+                localPath: data.localPath,
                 databaseUrl: data.databaseUrl || '',
                 proxyUrl: data.proxyUrl || '',
                 createdAt: Date.now()
             }
+
+            // 1. Scaffold directory on disk
+            const initRes = await (window as any).electronAPI.initProjectDirectory(data.localPath, project)
+            if (!initRes.success) {
+                throw new Error(`Failed to create project directory: ${initRes.error}`)
+            }
+
+            // 2. Add to IndexedDB
             await db.projects.add(project)
 
+            // 3. Add to recent projects
+            fireAndForgetFileWrite('addRecentProject', () =>
+                (window as any).electronAPI.addRecentProject({ id: project.id, name: project.name, localPath: project.localPath })
+            )
+
+            // 4. Remote sync if configured
             if (project.databaseUrl) {
                 await triggerFullProjectSync(qc, project)
             }
@@ -124,6 +140,27 @@ export function useUpdateProject() {
             const oldProject = await db.projects.get(id)
             await db.projects.update(id, data)
             const newProject = await db.projects.get(id)
+
+            // Write updates to file system
+            if (newProject?.localPath) {
+                fireAndForgetFileWrite('writeProjectMeta', () =>
+                    (window as any).electronAPI.writeProjectMeta(newProject.localPath, {
+                        id: newProject.id,
+                        name: newProject.name,
+                        createdAt: newProject.createdAt
+                    })
+                )
+                // Update secrets if DB/proxy config changed
+                if (data.databaseUrl !== undefined || data.proxyUrl !== undefined || data.lastDeployedAt !== undefined) {
+                    fireAndForgetFileWrite('writeProjectSecrets', () =>
+                        (window as any).electronAPI.writeProjectSecrets(newProject.localPath, {
+                            databaseUrl: newProject.databaseUrl,
+                            proxyUrl: newProject.proxyUrl,
+                            lastDeployedAt: newProject.lastDeployedAt
+                        })
+                    )
+                }
+            }
 
             if (newProject && newProject.databaseUrl && (!oldProject?.databaseUrl || oldProject.databaseUrl !== newProject.databaseUrl)) {
                 await triggerFullProjectSync(qc, newProject)
@@ -189,10 +226,29 @@ export function useDeleteProject() {
                     await db.teamConnections.where('projectId').equals(id).delete()
                     await db.projects.delete(id)
                 })
+
+                // Remove from recent projects list
+                fireAndForgetFileWrite('removeRecentProject', () =>
+                    (window as any).electronAPI.removeRecentProject(id)
+                )
+
+                // Note: We do NOT delete the project directory from disk.
+                // The user can re-import it or use git.
             } else if (target === 'remote') {
                 // If we only deleted remote, we MUST clear the databaseUrl locally 
                 // so the project reverts to "Local" mode
                 await db.projects.update(id, { databaseUrl: '', proxyUrl: '' })
+
+                // Update secrets file
+                if (project?.localPath) {
+                    fireAndForgetFileWrite('clearProjectSecrets', () =>
+                        (window as any).electronAPI.writeProjectSecrets(project.localPath, {
+                            databaseUrl: '',
+                            proxyUrl: '',
+                            lastDeployedAt: null
+                        })
+                    )
+                }
             }
         },
         onSuccess: () => qc.invalidateQueries({ queryKey: ['projects'] })
@@ -211,7 +267,7 @@ export function useSyncProject() {
 export function useImportProject() {
     const qc = useQueryClient()
     return useMutation({
-        mutationFn: async ({ url, projectId, name }: { url: string; projectId: string; name: string }) => {
+        mutationFn: async ({ url, projectId, name, localPath }: { url: string; projectId: string; name: string; localPath: string }) => {
             // 1. Fetch remote data (folders and apis)
             const res = await (window as any).electronAPI.fetchRemoteData(url, projectId)
             if (!res.success) throw new Error(res.error || 'Failed to fetch remote data')
@@ -224,6 +280,7 @@ export function useImportProject() {
                 await db.projects.put({
                     id: projectId,
                     name: name,
+                    localPath: localPath,
                     databaseUrl: url, // Mark it as synced
                     createdAt: Date.now()
                 })
@@ -299,6 +356,25 @@ export function useImportProject() {
                     })
                 }
             })
+
+            // 3. Write everything to disk
+            const allFolders = await db.folders.where('projectId').equals(projectId).toArray()
+            const allApis = await db.apiCollections.where('projectId').equals(projectId).toArray()
+            const allEnvs = await db.environments.where('projectId').equals(projectId).toArray()
+
+            fireAndForgetFileWrite('writeFullProjectToDisk', () =>
+                (window as any).electronAPI.writeFullProjectToDisk(localPath, {
+                    project: { id: projectId, name, databaseUrl: url, localPath, createdAt: Date.now() },
+                    folders: allFolders,
+                    apis: allApis,
+                    environments: allEnvs
+                })
+            )
+
+            // 4. Add to recent projects
+            fireAndForgetFileWrite('addRecentProject', () =>
+                (window as any).electronAPI.addRecentProject({ id: projectId, name, localPath })
+            )
 
             return { id: projectId }
         },

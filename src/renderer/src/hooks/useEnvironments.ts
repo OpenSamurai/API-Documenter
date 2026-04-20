@@ -4,6 +4,7 @@ import type { Environment } from '@/types'
 import { v4 as uuid } from 'uuid'
 import { useAppStore } from '@/stores/appStore'
 import { performSync } from './useSync'
+import { getProjectLocalPath, fireAndForgetFileWrite } from '@/utils/fileSync'
 
 export function useEnvironments(projectId: string | null) {
     const { isTeamWorkspace, teamConfig } = useAppStore()
@@ -42,6 +43,14 @@ export function useEnvironments(projectId: string | null) {
                     createdAt: Date.now()
                 }
                 await db.environments.add(globalEnv)
+
+                // Write to disk
+                const localPath = await getProjectLocalPath(projectId)
+                if (localPath) {
+                    fireAndForgetFileWrite('writeEnvironmentFile', () =>
+                        (window as any).electronAPI.writeEnvironmentFile(localPath, globalEnv)
+                    )
+                }
 
                 // Queue sync to make sure it exists on remote too
                 await db.syncQueue.add({
@@ -106,6 +115,14 @@ export function useCreateEnvironment() {
 
             await db.environments.add(env)
 
+            // Write to disk
+            const localPath = await getProjectLocalPath(env.projectId)
+            if (localPath) {
+                fireAndForgetFileWrite('writeEnvironmentFile', () =>
+                    (window as any).electronAPI.writeEnvironmentFile(localPath, env)
+                )
+            }
+
             // Queue sync
             await db.syncQueue.add({
                 id: uuid(),
@@ -158,6 +175,14 @@ export function useUpdateEnvironment() {
             const updatedEnv = { ...env, syncStatus: 'pending' as any }
             await db.environments.update(env.id, updatedEnv)
 
+            // Write to disk
+            const localPath = await getProjectLocalPath(env.projectId)
+            if (localPath) {
+                fireAndForgetFileWrite('writeEnvironmentFile', () =>
+                    (window as any).electronAPI.writeEnvironmentFile(localPath, updatedEnv)
+                )
+            }
+
             // Queue sync
             await db.syncQueue.add({
                 id: uuid(),
@@ -205,6 +230,14 @@ export function useDeleteEnvironment() {
 
             const env = await db.environments.get(id)
             if (env) {
+                // Delete from disk
+                const localPath = await getProjectLocalPath(projectId)
+                if (localPath) {
+                    fireAndForgetFileWrite('deleteEnvironmentFile', () =>
+                        (window as any).electronAPI.deleteEnvironmentFile(localPath, id)
+                    )
+                }
+
                 await db.environments.delete(id)
 
                 // Queue sync

@@ -13,6 +13,7 @@ export function CreateProjectDialog() {
 
     // Create state
     const [name, setName] = useState('')
+    const [localPath, setLocalPath] = useState('')
 
     // Import state
     const [dbUrl, setDbUrl] = useState('')
@@ -21,6 +22,7 @@ export function CreateProjectDialog() {
     const [isLoadingProjects, setIsLoadingProjects] = useState(false)
     const [importError, setImportError] = useState('')
     const [infoMessage, setInfoMessage] = useState('')
+    const [importLocalPath, setImportLocalPath] = useState('')
 
     useEffect(() => {
         const h = (e: KeyboardEvent) => { if (e.key === 'Escape') close() }
@@ -63,20 +65,26 @@ export function CreateProjectDialog() {
         }
     }
 
+    const browsePath = async (setter: (v: string) => void) => {
+        const dir = await (window as any).electronAPI.selectDirectory()
+        if (dir) setter(dir)
+    }
+
     const submit = async () => {
         if (tab === 'create') {
-            if (!name.trim()) return
-            const p = await create.mutateAsync({ name: name.trim() })
+            if (!name.trim() || !localPath.trim()) return
+            const p = await create.mutateAsync({ name: name.trim(), localPath: localPath.trim() })
             selectProject(p.id); close()
         } else {
-            if (!selectedProjectId || !dbUrl.trim()) return
+            if (!selectedProjectId || !dbUrl.trim() || !importLocalPath.trim()) return
             const selectedMatch = remoteProjects.find(p => p.id === selectedProjectId)
             if (!selectedMatch) return
             try {
                 const p = await importProj.mutateAsync({
                     url: dbUrl.trim(),
                     projectId: selectedProjectId,
-                    name: selectedMatch.name
+                    name: selectedMatch.name,
+                    localPath: importLocalPath.trim()
                 })
                 selectProject(p.id); close()
             } catch (err: any) {
@@ -86,7 +94,7 @@ export function CreateProjectDialog() {
         }
     }
 
-    const canSubmit = tab === 'create' ? !!name.trim() : !!selectedProjectId
+    const canSubmit = tab === 'create' ? (!!name.trim() && !!localPath.trim()) : (!!selectedProjectId && !!importLocalPath.trim())
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center"
@@ -138,9 +146,36 @@ export function CreateProjectDialog() {
                 {/* Fields */}
                 <div style={{ marginTop: 24, minHeight: '120px' }}>
                     {tab === 'create' ? (
-                        <div>
-                            <FieldLabel text="Project Name" required />
-                            <FieldInput value={name} onChange={setName} placeholder="My API" autoFocus onSubmit={submit} />
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                            <div>
+                                <FieldLabel text="Project Name" required />
+                                <FieldInput value={name} onChange={setName} placeholder="My API" autoFocus onSubmit={submit} />
+                            </div>
+                            <div>
+                                <FieldLabel text="Project Location" required hint="Folder on disk for git support" />
+                                <div style={{ display: 'flex', gap: '8px' }}>
+                                    <div style={{
+                                        flex: 1, height: 42, padding: '0 14px', display: 'flex', alignItems: 'center',
+                                        background: '#0F0F0F', border: '1px solid #2A2A2A', borderRadius: 10,
+                                        color: localPath ? '#FFFFFF' : '#6B7280', fontSize: 12, fontFamily: 'monospace',
+                                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
+                                    }}>
+                                        {localPath || 'No folder selected'}
+                                    </div>
+                                    <button
+                                        onClick={() => browsePath(setLocalPath)}
+                                        style={{
+                                            padding: '0 16px', borderRadius: '10px', background: '#1F1F1F', color: '#FFF',
+                                            border: '1px solid #2A2A2A', cursor: 'pointer', fontSize: '13px', fontWeight: 500,
+                                            whiteSpace: 'nowrap'
+                                        }}>
+                                        Browse
+                                    </button>
+                                </div>
+                                <p style={{ fontSize: 11, color: '#4B5563', margin: '6px 0 0' }}>
+                                    A project directory will be created here with .apidoc files for Git version control.
+                                </p>
+                            </div>
                         </div>
                     ) : (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -200,6 +235,29 @@ export function CreateProjectDialog() {
                             {importError && (
                                 <p style={{ fontSize: '12px', color: '#EF4444', margin: 0 }}>{importError}</p>
                             )}
+
+                            <div>
+                                <FieldLabel text="Save Location" required hint="Folder on disk" />
+                                <div style={{ display: 'flex', gap: '8px' }}>
+                                    <div style={{
+                                        flex: 1, height: 42, padding: '0 14px', display: 'flex', alignItems: 'center',
+                                        background: '#0F0F0F', border: '1px solid #2A2A2A', borderRadius: 10,
+                                        color: importLocalPath ? '#FFFFFF' : '#6B7280', fontSize: 12, fontFamily: 'monospace',
+                                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
+                                    }}>
+                                        {importLocalPath || 'No folder selected'}
+                                    </div>
+                                    <button
+                                        onClick={() => browsePath(setImportLocalPath)}
+                                        style={{
+                                            padding: '0 16px', borderRadius: '10px', background: '#1F1F1F', color: '#FFF',
+                                            border: '1px solid #2A2A2A', cursor: 'pointer', fontSize: '13px', fontWeight: 500,
+                                            whiteSpace: 'nowrap'
+                                        }}>
+                                        Browse
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     )}
                 </div>
