@@ -35,13 +35,23 @@ class ApiDocumenterDB extends Dexie {
             environments: 'id, projectId, folderId, name, isGlobal, syncStatus, createdAt'
         })
 
-        this.version(5).stores({
-            projects: 'id, name, localPath, createdAt',
-            folders: 'id, projectId, name, orderIndex, syncStatus, createdAt',
-            apiCollections: 'id, projectId, folderId, name, method, syncStatus, createdAt',
-            syncQueue: 'id, localId, projectId, tableName, status, createdAt',
+        this.version(7).stores({
+            projects: 'id, name, localPath, createdAt, updatedAt',
+            folders: 'id, projectId, name, orderIndex, syncStatus, createdAt, updatedAt',
+            apiCollections: 'id, projectId, folderId, name, method, syncStatus, createdAt, updatedAt',
+            syncQueue: 'id, localId, projectId, branch, tableName, status, createdAt',
             teamConnections: 'id, name, url, projectId, lastUsedAt',
-            environments: 'id, projectId, folderId, name, isGlobal, syncStatus, createdAt'
+            environments: 'id, projectId, folderId, name, isGlobal, syncStatus, createdAt, updatedAt'
+        })
+
+        // Version 8: Add compound index for syncQueue upsert behavior
+        this.version(8).stores({
+            projects: 'id, name, localPath, createdAt, updatedAt',
+            folders: 'id, projectId, name, orderIndex, syncStatus, createdAt, updatedAt',
+            apiCollections: 'id, projectId, folderId, name, method, syncStatus, createdAt, updatedAt',
+            syncQueue: 'id, localId, [projectId+localId], projectId, branch, tableName, status, createdAt',
+            teamConnections: 'id, name, url, projectId, lastUsedAt',
+            environments: 'id, projectId, folderId, name, isGlobal, syncStatus, createdAt, updatedAt'
         })
 
     }

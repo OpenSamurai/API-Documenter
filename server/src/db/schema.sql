@@ -5,7 +5,11 @@ CREATE TABLE IF NOT EXISTS projects (
   database_url VARCHAR(500),  -- Admin only
   proxy_url VARCHAR(500),     -- Team sharing
   last_deployed_at TIMESTAMP NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  version INT DEFAULT 1,
+  is_deleted BOOLEAN DEFAULT FALSE,
+  deleted_at TIMESTAMP NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
 -- 2. FOLDERS (RBAC assigned here)
@@ -17,7 +21,11 @@ CREATE TABLE IF NOT EXISTS folders (
   order_index INT DEFAULT 0,
   last_sync TIMESTAMP NULL,
   sync_status VARCHAR(20) DEFAULT 'synced',
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  version INT DEFAULT 1,
+  is_deleted BOOLEAN DEFAULT FALSE,
+  deleted_at TIMESTAMP NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
 -- 3. API COLLECTIONS (Inside folders)
@@ -38,9 +46,12 @@ CREATE TABLE IF NOT EXISTS api_collections (
   request_body TEXT, -- JSON
   response_examples TEXT, -- JSON
   version INT DEFAULT 1,
+  is_deleted BOOLEAN DEFAULT FALSE,
+  deleted_at TIMESTAMP NULL,
   last_sync TIMESTAMP NULL,
   sync_status VARCHAR(20) DEFAULT 'synced',
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
 -- 4. RBAC USERS (Folder permissions)
@@ -51,7 +62,8 @@ CREATE TABLE IF NOT EXISTS rbac_users (
   allowed_folders TEXT NOT NULL, -- JSON ["Auth"] or ["*"]
   project_id VARCHAR(50),
   role VARCHAR(20) DEFAULT 'viewer',
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
 -- 5. ENVIRONMENTS (Variables and Base URLs)
@@ -63,7 +75,11 @@ CREATE TABLE IF NOT EXISTS environments (
   base_url TEXT,
   is_global BOOLEAN DEFAULT FALSE,
   variables TEXT, -- JSON key-value pairs
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  version INT DEFAULT 1,
+  is_deleted BOOLEAN DEFAULT FALSE,
+  deleted_at TIMESTAMP NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
 -- 6. SYNC QUEUE (Offline changes)

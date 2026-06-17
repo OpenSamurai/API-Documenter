@@ -6,6 +6,7 @@ import { useAppStore } from '@/stores/appStore'
 import { performSync } from './useSync'
 import { mapRemoteFolder } from '@/utils/remoteMapper'
 import { getProjectLocalPath, fireAndForgetFileWrite } from '@/utils/fileSync'
+import { upsertSyncQueueItem } from '@/utils/syncQueueUtils'
 
 export function useFolders(projectId: string | null) {
     const { isTeamWorkspace, teamConfig } = useAppStore()
@@ -45,10 +46,10 @@ export function useFolders(projectId: string | null) {
 export function useFolder(id: string | null) {
     const { isTeamWorkspace, teamConfig } = useAppStore()
 
-    return useQuery<Folder | undefined>({
+    return useQuery<Folder | null>({
         queryKey: ['folder', id, isTeamWorkspace],
         queryFn: async () => {
-            if (!id) return undefined
+            if (!id) return null
 
             if (isTeamWorkspace && teamConfig) {
                 const res = await (window as any).electronAPI.sendHttpRequest({
@@ -64,7 +65,7 @@ export function useFolder(id: string | null) {
                 return mapRemoteFolder(data)
             }
 
-            return db.folders.get(id)
+            return (await db.folders.get(id)) || null
         },
         enabled: !!id
     })
@@ -107,8 +108,9 @@ export function useCreateFolder() {
                     description: data.description,
                     orderIndex: 0,
                     syncStatus: 'synced',
-                    lastSync: Date.now(),
-                    createdAt: Date.now()
+                    lastSync: new Date().toISOString(),
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString()
                 } as Folder
             }
             const count = await db.folders.where('projectId').equals(data.projectId).count()
@@ -120,7 +122,8 @@ export function useCreateFolder() {
                 orderIndex: count,
                 lastSync: null,
                 syncStatus: 'offline',
-                createdAt: Date.now()
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
             }
             await db.folders.add(folder)
 
@@ -133,24 +136,24 @@ export function useCreateFolder() {
             }
 
             // Queue sync
+            const { activeBranch } = useAppStore.getState()
             await db.syncQueue.add({
                 id: uuid(),
                 localId: folder.id,
                 projectId: folder.projectId,
+                branch: activeBranch || 'main',
                 tableName: 'folders',
                 operation: 'create',
                 data: JSON.stringify(folder),
                 status: 'pending',
                 retries: 0,
-                createdAt: Date.now()
+                createdAt: new Date().toISOString()
             })
 
             return folder
         },
         onSuccess: (folder: Folder) => {
             qc.invalidateQueries({ queryKey: ['folders', folder.projectId] })
-            const { proxyConnection } = useAppStore.getState()
-            performSync(qc, proxyConnection, folder.projectId)
         }
     })
 }
@@ -187,7 +190,8 @@ export function useUpdateFolder() {
             }
 
             const oldFolder = await db.folders.get(id)
-            await db.folders.update(id, data)
+            const newVersion = (oldFolder?.version || 1) + 1
+            await db.folders.update(id, { ...data, version: newVersion, syncStatus: 'uncommitted', updatedAt: new Date().toISOString() })
             const folder = await db.folders.get(id)
 
             // Write to disk
@@ -207,18 +211,17 @@ export function useUpdateFolder() {
                 }
             }
 
-            // Queue sync
+            // Queue sync (upsert)
             if (folder) {
-                await db.syncQueue.add({
-                    id: uuid(),
+                const { activeBranch } = useAppStore.getState()
+                await upsertSyncQueueItem({
                     localId: folder.id,
                     projectId: folder.projectId,
+                    branch: activeBranch || 'main',
                     tableName: 'folders',
                     operation: 'update',
                     data: JSON.stringify(folder),
-                    status: 'pending',
-                    retries: 0,
-                    createdAt: Date.now()
+                    version: newVersion
                 })
             }
 
@@ -228,8 +231,6 @@ export function useUpdateFolder() {
             if (folder) {
                 qc.invalidateQueries({ queryKey: ['folders', folder.projectId] })
                 qc.invalidateQueries({ queryKey: ['folder', folder.id] })
-                const { proxyConnection } = useAppStore.getState()
-                performSync(qc, proxyConnection, folder.projectId)
             }
         }
     })
@@ -271,17 +272,16 @@ export function useDeleteFolder() {
                 await db.apiCollections.where('folderId').equals(id).delete()
                 await db.folders.delete(id)
 
-                // Queue sync
-                await db.syncQueue.add({
-                    id: uuid(),
+                // Queue sync (upsert)
+                const { activeBranch } = useAppStore.getState()
+                await upsertSyncQueueItem({
                     localId: id,
                     projectId: folder.projectId,
+                    branch: activeBranch || 'main',
                     tableName: 'folders',
                     operation: 'delete',
                     data: JSON.stringify({ id }),
-                    status: 'pending',
-                    retries: 0,
-                    createdAt: Date.now()
+                    version: folder.version
                 })
             })
 
@@ -290,8 +290,6 @@ export function useDeleteFolder() {
         onSuccess: (projectId: string | null) => {
             if (projectId) {
                 qc.invalidateQueries({ queryKey: ['folders', projectId] })
-                const { proxyConnection } = useAppStore.getState()
-                performSync(qc, proxyConnection, projectId)
             }
             qc.invalidateQueries({ queryKey: ['apis'] })
         }

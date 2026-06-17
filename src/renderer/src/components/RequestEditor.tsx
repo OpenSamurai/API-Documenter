@@ -36,7 +36,10 @@ interface Props { apiId: string }
 export function RequestEditor({ apiId }: Props) {
     const { data: api } = useApi(apiId)
     const { data: folder } = useFolder(api?.folderId || null)
-    const { currentProjectId, currentEnvironmentId, activeEditorTab, setActiveEditorTab } = useAppStore()
+    const currentProjectId = useAppStore(s => s.currentProjectId)
+    const currentEnvironmentId = useAppStore(s => s.currentEnvironmentId)
+    const activeEditorTab = useAppStore(s => s.activeEditorTab)
+    const setActiveEditorTab = useAppStore(s => s.setActiveEditorTab)
     const { data: environments } = useEnvironments(currentProjectId)
     const updateApi = useUpdateApi()
 
@@ -78,9 +81,9 @@ export function RequestEditor({ apiId }: Props) {
 
     useEffect(() => {
         if (!api) return
-        setName(api.name); setDescription(api.description); setMethod(api.method)
-        setPath(api.path); setUrlParams(api.urlParams || []); setHeaders(api.headers || [])
-        setBodyType(api.bodyType); setRequestBody(api.requestBody)
+        setName(api.name || ''); setDescription(api.description || ''); setMethod(api.method || 'GET')
+        setPath(api.path || ''); setUrlParams(api.urlParams || []); setHeaders(api.headers || [])
+        setBodyType(api.bodyType || 'none'); setRequestBody(api.requestBody || '')
         setRawType(api.rawType || 'json')
         setFormData(api.formData || [])
         setUrlencoded(api.urlencoded || [])
@@ -90,14 +93,20 @@ export function RequestEditor({ apiId }: Props) {
 
     useEffect(() => {
         if (!api) return
-        const dirty = name !== api.name || description !== api.description || method !== api.method || path !== api.path ||
-            JSON.stringify(urlParams) !== JSON.stringify(api.urlParams) || JSON.stringify(headers) !== JSON.stringify(api.headers) ||
-            bodyType !== api.bodyType || requestBody !== api.requestBody ||
-            rawType !== (api.rawType || 'json') ||
-            JSON.stringify(formData) !== JSON.stringify(api.formData || []) ||
-            JSON.stringify(urlencoded) !== JSON.stringify(api.urlencoded || []) ||
-            JSON.stringify(responses) !== JSON.stringify(api.responseExamples)
-        setSaved(!dirty)
+        
+        const timeout = setTimeout(() => {
+            const dirty = name !== api.name || description !== api.description || method !== api.method || path !== api.path ||
+                JSON.stringify(urlParams) !== JSON.stringify(api.urlParams) || JSON.stringify(headers) !== JSON.stringify(api.headers) ||
+                bodyType !== api.bodyType || requestBody !== api.requestBody ||
+                rawType !== (api.rawType || 'json') ||
+                JSON.stringify(formData) !== JSON.stringify(api.formData || []) ||
+                JSON.stringify(urlencoded) !== JSON.stringify(api.urlencoded || []) ||
+                JSON.stringify(responses) !== JSON.stringify(api.responseExamples)
+            
+            setSaved(!dirty)
+        }, 500) // Debounce for 500ms
+
+        return () => clearTimeout(timeout)
     }, [api, name, description, method, path, urlParams, headers, bodyType, requestBody, responses, rawType, formData, urlencoded])
 
     const save = useCallback(async () => {
@@ -338,7 +347,7 @@ export function RequestEditor({ apiId }: Props) {
 
     const saveAsExample = (status: number, body: string, resHeaders: Record<string, string>) => {
         const headerPairs: KeyValuePair[] = Object.entries(resHeaders).map(([k, v]) => ({ id: uuid(), key: k, value: v, enabled: true }))
-        const now = Date.now()
+        const now = new Date().toISOString()
         const example: ResponseExample = {
             id: uuid(), statusCode: status,
             title: `${status} Response`,
@@ -401,10 +410,10 @@ export function RequestEditor({ apiId }: Props) {
                             <button onClick={() => setMethodDd(!methodDd)}
                                 style={{
                                     display: 'flex', alignItems: 'center', gap: '8px', fontFamily: 'monospace', fontWeight: 700, fontSize: '12px',
-                                    background: METHOD_COLORS[method].bg,
-                                    border: `1px solid ${METHOD_COLORS[method].border}`,
+                                    background: (METHOD_COLORS[method] || METHOD_COLORS.GET).bg,
+                                    border: `1px solid ${(METHOD_COLORS[method] || METHOD_COLORS.GET).border}`,
                                     borderRadius: '10px', padding: '8px 14px',
-                                    color: METHOD_COLORS[method].text,
+                                    color: (METHOD_COLORS[method] || METHOD_COLORS.GET).text,
                                     transition: '150ms ease', minWidth: '85px'
                                 }}
                                 onMouseEnter={e => { e.currentTarget.style.filter = 'brightness(1.2)' }}

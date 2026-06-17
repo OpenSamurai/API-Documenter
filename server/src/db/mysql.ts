@@ -5,7 +5,7 @@ export class MySqlAdapter implements DbAdapter {
     private pool: Pool | null = null;
 
     async connect(url: string): Promise<void> {
-        this.pool = mysql.createPool(url);
+        this.pool = mysql.createPool({ uri: url, timezone: 'Z' });
     }
 
     async query<T>(sql: string, params?: any[]): Promise<T[]> {

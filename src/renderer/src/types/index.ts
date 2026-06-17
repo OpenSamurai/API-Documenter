@@ -4,7 +4,7 @@ export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'HEAD' | 
 export type BodyType = 'none' | 'form-data' | 'urlencoded' | 'raw'
 export type RawType = 'json' | 'text' | 'html' | 'xml'
 
-export type SyncStatus = 'synced' | 'pending' | 'conflict' | 'offline'
+export type SyncStatus = 'synced' | 'pending' | 'uncommitted' | 'conflict' | 'offline'
 
 export type UserRole = 'viewer' | 'editor' | 'admin'
 
@@ -38,8 +38,8 @@ export interface ResponseExample {
     body: string
     headers?: KeyValuePair[]
     metadata: ResponseExampleMetadata
-    createdAt: number
-    updatedAt: number
+    createdAt: string
+    updatedAt: string
 }
 
 // ─── Core Data Models ───────────────────────────────────────────
@@ -49,8 +49,13 @@ export interface Project {
     localPath: string
     databaseUrl?: string
     proxyUrl?: string
-    lastDeployedAt?: number
-    createdAt: number
+    lastDeployedAt?: string
+    syncedBranches?: string[] // Track which branches have been pushed to remote
+    version?: number
+    isDeleted?: boolean
+    deletedAt?: string | null
+    createdAt: string
+    updatedAt: string
 }
 
 export interface Folder {
@@ -60,9 +65,13 @@ export interface Folder {
     description: string
     orderIndex: number
     role?: UserRole
-    lastSync: number | null
+    lastSync: string | null
     syncStatus: SyncStatus
-    createdAt: number
+    version?: number
+    isDeleted?: boolean
+    deletedAt?: string | null
+    createdAt: string
+    updatedAt: string
 }
 
 // ─── Environment ───────────────────────────────────────────────
@@ -75,9 +84,13 @@ export interface Environment {
     isGlobal: boolean
     variables: string // JSON Record<string, string>
     role?: UserRole
-    lastSync: number | null
+    lastSync: string | null
     syncStatus: SyncStatus
-    createdAt: number
+    version?: number
+    isDeleted?: boolean
+    deletedAt?: string | null
+    createdAt: string
+    updatedAt: string
 }
 
 export interface ApiCollection {
@@ -97,9 +110,12 @@ export interface ApiCollection {
     requestBody: string
     responseExamples: ResponseExample[]
     version: number
-    lastSync: number | null
+    lastSync: string | null
     syncStatus: SyncStatus
-    createdAt: number
+    isDeleted?: boolean
+    deletedAt?: string | null
+    createdAt: string
+    updatedAt: string
 }
 
 // ─── Sync Queue ─────────────────────────────────────────────────
@@ -110,12 +126,30 @@ export interface SyncQueueItem {
     id: string
     localId: string
     projectId: string
+    branch?: string // The branch context when this change was made
     tableName: SyncTableName
     operation: SyncOperation
-    data: string
-    status: 'pending' | 'synced' | 'failed'
+    data: string // Latest entity snapshot at queue time
+    version?: number // Entity version at queue time
+    status: 'uncommitted' | 'pending' | 'syncing' | 'synced' | 'conflict' | 'failed'
     retries: number
-    createdAt: number
+    createdAt: string
+}
+
+// ─── Conflict Types ─────────────────────────────────────────────
+export type ConflictType = 'update-update' | 'delete-update' | 'update-delete'
+
+export interface ConflictDetail {
+    localId: string
+    tableName: SyncTableName
+    conflictType: ConflictType
+    baseVersion: number
+    localVersion: number
+    remoteVersion: number
+    localData: any | null   // Full JSON of local entity (null if locally deleted)
+    remoteData: any | null  // Full JSON of remote entity (null if remotely deleted)
+    entityName: string      // Human-readable name (API name, folder name, etc.)
+    remoteQueueId?: string  // ID of the remote sync_queue row for marking processed
 }
 
 export interface FolderPermission {
@@ -132,7 +166,8 @@ export interface RbacUser {
     allowedEnvironments: string[]
     projectId: string
     role: UserRole
-    createdAt: number
+    createdAt: string
+    updatedAt: string
 }
 
 // ─── Proxy Connection ───────────────────────────────────────────
@@ -145,13 +180,28 @@ export interface ProxyConnection {
     allowedEnvironments?: string[]
 }
 
+export interface GitStatusResult {
+    not_added: string[]
+    conflicted: string[]
+    created: string[]
+    deleted: string[]
+    modified: string[]
+    renamed: any[]
+    files: any[]
+    staged: string[]
+    ahead: number
+    behind: number
+    current: string
+    tracking: string | null
+}
+
 export interface SavedTeamConnection {
     id: string
     name: string
     url: string
     token: string
     projectId: string
-    lastUsedAt: number
+    lastUsedAt: string
 }
 
 // ─── UI State Types ─────────────────────────────────────────────
@@ -174,9 +224,11 @@ export const METHOD_COLORS: Record<HttpMethod, MethodColorStyle> = {
     OPTIONS: { bg: 'rgba(148, 163, 184, 0.1)', text: '#94a3b8', border: 'rgba(148, 163, 184, 0.2)' }
 }
 
-export const SYNC_ICONS: Record<SyncStatus, { icon: string; label: string }> = {
+export const SYNC_ICONS: Record<SyncStatus | 'syncing', { icon: string; label: string }> = {
     synced: { icon: '✓', label: 'Synced' },
     pending: { icon: '↻', label: 'Pending sync' },
+    syncing: { icon: '⟳', label: 'Syncing...' },
+    uncommitted: { icon: '●', label: 'Uncommitted' },
     conflict: { icon: '⚠', label: 'Conflict' },
     offline: { icon: '◉', label: 'Local only' }
 }

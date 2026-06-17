@@ -20,6 +20,7 @@
     "@codemirror/language": "^6.12.3",
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
+    "@monaco-editor/react": "^4.7.0",
     "@tanstack/react-query": "^5.62.0",
     "@tiptap/extension-link": "^3.22.2",
     "@tiptap/extension-placeholder": "^3.22.2",

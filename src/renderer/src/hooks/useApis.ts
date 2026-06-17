@@ -6,6 +6,7 @@ import { useAppStore } from '@/stores/appStore'
 import { performSync } from './useSync'
 import { mapRemoteApi } from '@/utils/remoteMapper'
 import { getProjectLocalPath, fireAndForgetFileWrite } from '@/utils/fileSync'
+import { upsertSyncQueueItem } from '@/utils/syncQueueUtils'
 
 export function useApis(folderId: string | null) {
     const { isTeamWorkspace, teamConfig } = useAppStore()
@@ -65,10 +66,10 @@ export function useAllProjectApis(projectId: string | null) {
 export function useApi(id: string | null) {
     const { isTeamWorkspace, teamConfig } = useAppStore()
 
-    return useQuery<ApiCollection | undefined>({
+    return useQuery<ApiCollection | null>({
         queryKey: ['api', id, isTeamWorkspace],
         queryFn: async () => {
-            if (!id) return undefined
+            if (!id) return null
 
             if (isTeamWorkspace && teamConfig) {
                 const res = await (window as any).electronAPI.sendHttpRequest({
@@ -83,7 +84,7 @@ export function useApi(id: string | null) {
                 return mapRemoteApi(data)
             }
 
-            return await db.apiCollections.get(id)
+            return (await db.apiCollections.get(id)) || null
         },
         enabled: !!id
     })
@@ -155,8 +156,9 @@ export function useCreateApi() {
                     responseExamples: [],
                     version: 1,
                     syncStatus: 'synced',
-                    lastSync: Date.now(), // Assuming successful creation means it's synced now
-                    createdAt: Date.now()
+                    lastSync: new Date().toISOString(), // Assuming successful creation means it's synced now
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString()
                 } as ApiCollection
             }
 
@@ -181,7 +183,8 @@ export function useCreateApi() {
                 version: 1,
                 lastSync: null,
                 syncStatus: 'offline',
-                createdAt: Date.now()
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
             }
             await db.apiCollections.add(api)
 
@@ -194,16 +197,18 @@ export function useCreateApi() {
             }
 
             // Queue sync
+            const { activeBranch } = useAppStore.getState()
             await db.syncQueue.add({
                 id: uuid(),
                 localId: api.id,
                 projectId: api.projectId,
+                branch: activeBranch || 'main',
                 tableName: 'apiCollections',
                 operation: 'create',
                 data: JSON.stringify(api),
-                status: 'pending',
+                status: 'uncommitted',
                 retries: 0,
-                createdAt: Date.now()
+                createdAt: new Date().toISOString()
             })
 
             return api
@@ -211,8 +216,6 @@ export function useCreateApi() {
         onSuccess: (api: ApiCollection) => {
             qc.invalidateQueries({ queryKey: ['apis', api.folderId] })
             qc.invalidateQueries({ queryKey: ['apis', 'project', api.projectId] })
-            const { proxyConnection } = useAppStore.getState()
-            performSync(qc, proxyConnection, api.projectId)
         }
     })
 }
@@ -258,7 +261,9 @@ export function useUpdateApi() {
                 return { id, ...data } as ApiCollection
             }
 
-            await db.apiCollections.update(id, { ...data, version: (data.version || 1) })
+            const oldApi = await db.apiCollections.get(id)
+            const newVersion = (oldApi?.version || 1) + 1
+            await db.apiCollections.update(id, { ...data, version: newVersion, syncStatus: 'uncommitted', updatedAt: new Date().toISOString() })
             const api = await db.apiCollections.get(id)
 
             // Write updated .apidoc file to disk
@@ -271,18 +276,17 @@ export function useUpdateApi() {
                 }
             }
 
-            // Queue sync
+            // Queue sync (upsert: update existing uncommitted entry if present)
             if (api) {
-                await db.syncQueue.add({
-                    id: uuid(),
+                const { activeBranch } = useAppStore.getState()
+                await upsertSyncQueueItem({
                     localId: api.id,
                     projectId: api.projectId,
+                    branch: activeBranch || 'main',
                     tableName: 'apiCollections',
                     operation: 'update',
                     data: JSON.stringify(api),
-                    status: 'pending',
-                    retries: 0,
-                    createdAt: Date.now()
+                    version: newVersion
                 })
             }
 
@@ -293,8 +297,7 @@ export function useUpdateApi() {
                 qc.invalidateQueries({ queryKey: ['api', api.id] })
                 qc.invalidateQueries({ queryKey: ['apis', api.folderId] })
                 qc.invalidateQueries({ queryKey: ['apis', 'project', api.projectId] })
-                const { proxyConnection } = useAppStore.getState()
-                performSync(qc, proxyConnection, api.projectId)
+                qc.invalidateQueries({ queryKey: ['api', api.id] })
             }
         }
     })
@@ -336,17 +339,16 @@ export function useDeleteApi() {
             await db.transaction('rw', [db.apiCollections, db.syncQueue], async () => {
                 await db.apiCollections.delete(id)
 
-                // Queue sync
-                await db.syncQueue.add({
-                    id: uuid(),
+                // Queue sync (upsert: change operation to delete)
+                const { activeBranch } = useAppStore.getState()
+                await upsertSyncQueueItem({
                     localId: id,
                     projectId: api.projectId,
+                    branch: activeBranch || 'main',
                     tableName: 'apiCollections',
                     operation: 'delete',
                     data: JSON.stringify({ id }),
-                    status: 'pending',
-                    retries: 0,
-                    createdAt: Date.now()
+                    version: api.version
                 })
             })
 
@@ -356,8 +358,6 @@ export function useDeleteApi() {
             if (api) {
                 qc.invalidateQueries({ queryKey: ['apis', api.folderId] })
                 qc.invalidateQueries({ queryKey: ['apis', 'project', api.projectId] })
-                const { proxyConnection } = useAppStore.getState()
-                performSync(qc, proxyConnection, api.projectId)
             }
         }
     })

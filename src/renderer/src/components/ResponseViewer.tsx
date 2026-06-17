@@ -35,18 +35,18 @@ export function ResponseViewer({ examples, onChange }: Props) {
             description: '',
             body: '{\n  \n}',
             metadata: { ...DEFAULT_METADATA, isDefault: examples.length === 0 },
-            createdAt: now, updatedAt: now
+            createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
         }
         onChange([...examples, ex]); setActive(examples.length); setAdding(false)
     }
 
     const update = <K extends keyof ResponseExample>(i: number, f: K, v: ResponseExample[K]) => {
-        const u = [...examples]; u[i] = { ...u[i], [f]: v, updatedAt: Date.now() }; onChange(u)
+        const u = [...examples]; u[i] = { ...u[i], [f]: v, updatedAt: new Date().toISOString() }; onChange(u)
     }
 
     const updateMeta = <K extends keyof ResponseExampleMetadata>(i: number, f: K, v: ResponseExampleMetadata[K]) => {
         const u = [...examples]
-        u[i] = { ...u[i], metadata: { ...u[i].metadata, [f]: v }, updatedAt: Date.now() }
+        u[i] = { ...u[i], metadata: { ...u[i].metadata, [f]: v }, updatedAt: new Date().toISOString() }
         // If setting isDefault, unset others
         if (f === 'isDefault' && v === true) {
             u.forEach((ex, j) => { if (j !== i) u[j] = { ...u[j], metadata: { ...u[j].metadata, isDefault: false } } })

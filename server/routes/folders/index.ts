@@ -1,6 +1,8 @@
 import { authenticate } from '../../src/middleware/auth.js';
+import crypto from 'crypto';
 import { checkFolderAccess } from '../../src/middleware/rbac.js';
 import { rateLimit } from '../../src/middleware/rateLimit.js';
+import { getProjectActiveBranch } from '../../src/db/proxyDb.js';
 
 export default async function handler(req: any, res: any) {
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -22,6 +24,8 @@ export default async function handler(req: any, res: any) {
     const { db, user } = context;
 
     try {
+        const activeBranch = await getProjectActiveBranch(db, user.projectId);
+
         if (req.method === 'GET') {
             let folders;
             const isWildcard = Array.isArray(user.allowedFolders)
@@ -29,11 +33,17 @@ export default async function handler(req: any, res: any) {
                 : !!(user.allowedFolders as Record<string, any>)['*'];
 
             if (user.role === 'admin' || isWildcard) {
-                folders = await db.query('SELECT * FROM folders WHERE project_id = ? ORDER BY order_index ASC', [user.projectId]);
+                folders = await db.query(
+                    'SELECT * FROM folders WHERE project_id = ? AND branch = ? AND (is_deleted = 0 OR is_deleted = false OR is_deleted IS NULL) ORDER BY order_index ASC',
+                    [user.projectId, activeBranch]
+                );
             } else {
                 // To support both ID and Name based permissions during transition, 
                 // we fetch all folders for the project and filter in JS.
-                const allFolders = await db.query('SELECT * FROM folders WHERE project_id = ? ORDER BY order_index ASC', [user.projectId]);
+                const allFolders = await db.query(
+                    'SELECT * FROM folders WHERE project_id = ? AND branch = ? AND (is_deleted = 0 OR is_deleted = false OR is_deleted IS NULL) ORDER BY order_index ASC',
+                    [user.projectId, activeBranch]
+                );
                 folders = allFolders.filter((f: any) => {
                     return (user.allowedFolders as any[]).some((p: any) => {
                         const idOrName = typeof p === 'string' ? p : p.folderId;
@@ -81,8 +91,13 @@ export default async function handler(req: any, res: any) {
             if (!id || !name) return res.status(400).json({ error: 'ID and Name are required' });
 
             await db.execute(
-                'INSERT INTO folders (id, project_id, name, description, order_index, sync_status) VALUES (?, ?, ?, ?, ?, ?)',
-                [id, user.projectId, name, description || '', order_index || 0, 'synced']
+                'INSERT INTO folders (id, project_id, branch, name, description, order_index, sync_status) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                [id, user.projectId, activeBranch, name, description || '', order_index || 0, 'synced']
+            );
+
+            await db.execute(
+                `INSERT INTO sync_queue (id, project_id, local_id, branch, table_name, operation, data, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                [crypto.randomUUID(), user.projectId, id, activeBranch, 'folders', 'create', JSON.stringify(req.body), 'pending']
             );
 
             // If editor, automatically grant permission to the folder they created (implementation detail: requires updating rbac_users in some setups, but here we assume allowed_folders includes it or is handled by admin)

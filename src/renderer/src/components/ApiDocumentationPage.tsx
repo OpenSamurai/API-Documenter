@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useAppStore } from '@/stores/appStore'
 import { db } from '@/db'
 import { useLiveQuery } from 'dexie-react-hooks'
@@ -112,9 +112,19 @@ export function ApiDocumentationPage() {
         }
         initialPages.push(coverPage)
 
-        // 2. Folders (Position 2+)
+        // 2. Pre-group APIs by folderId for O(1) lookup
+        const apisByFolder = new Map<string, any[]>()
+        apis.forEach(a => {
+            const fid = a.folderId?.toString()
+            if (fid) {
+                if (!apisByFolder.has(fid)) apisByFolder.set(fid, [])
+                apisByFolder.get(fid)!.push(a)
+            }
+        })
+
+        // 3. Folders (Position 2+)
         folders.forEach((f, idx) => {
-            const folderApis = apis.filter(a => a.folderId?.toString() === f.id.toString())
+            const folderApis = apisByFolder.get(f.id.toString()) || []
             let md = `## Folder: ${f.name}\n\n`
             if (f.description) md += `${f.description}\n\n`
 
@@ -217,7 +227,7 @@ export function ApiDocumentationPage() {
         setMarkdown(page?.markdown || '')
     }, [activeSectionId, pages])
 
-    const getMarkdownForCompile = useCallback(() => {
+    const compileMd = useMemo(() => {
         const sortedPages = [...pages]
             .filter(p => p.visible)
             .sort((a, b) => a.position - b.position)
@@ -281,33 +291,42 @@ export function ApiDocumentationPage() {
         return assembledParts.filter(Boolean).join('\n\n')
     }, [pages])
 
+    const isCompilingRef = useRef(false)
     const handleRecompile = useCallback(async () => {
-        const compileMd = getMarkdownForCompile()
-        if (!compileMd.trim() || isCompiling) return
+        if (!compileMd.trim() || isCompilingRef.current) return
+        
+        isCompilingRef.current = true
         setIsCompiling(true)
         try {
             const result = await (window as any).electronAPI.previewDocPdf(compileMd)
             if (result.success && result.data) {
-                if (pdfUrl) URL.revokeObjectURL(pdfUrl)
                 const blob = new Blob([result.data], { type: 'application/pdf' })
                 const url = URL.createObjectURL(blob)
-                setPdfUrl(url)
+                setPdfUrl(prev => {
+                    if (prev) URL.revokeObjectURL(prev)
+                    return url
+                })
             } else {
                 alert(`Compilation failed: ${result.error}`)
             }
         } catch (err) {
             console.error('PDF Preview Error:', err)
         } finally {
+            isCompilingRef.current = false
             setIsCompiling(false)
         }
-    }, [getMarkdownForCompile, isCompiling, pdfUrl])
+    }, [compileMd])
 
-    // Auto-compile PDF preview once initialized
+    // Auto-compile PDF preview once initialized, with a debounce to avoid lag during typing
     useEffect(() => {
-        if (isInitialized && pages.length > 0 && !pdfUrl && !isCompiling) {
+        if (!isInitialized || !compileMd.trim()) return
+
+        const timeout = setTimeout(() => {
             handleRecompile()
-        }
-    }, [isInitialized, pages, pdfUrl, isCompiling, handleRecompile])
+        }, 1500) // 1.5s debounce for PDF generation
+
+        return () => clearTimeout(timeout)
+    }, [isInitialized, compileMd, handleRecompile])
 
 
 
@@ -323,7 +342,6 @@ export function ApiDocumentationPage() {
     }, [handleRecompile])
 
     const handleExportPdf = async () => {
-        const compileMd = getMarkdownForCompile()
         if (!compileMd.trim() || isExporting) return
         setIsExporting(true)
         try {

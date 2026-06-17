@@ -1,6 +1,8 @@
 import { authenticate } from '../../src/middleware/auth.js';
+import crypto from 'crypto';
 import { checkFolderAccess } from '../../src/middleware/rbac.js';
 import { rateLimit } from '../../src/middleware/rateLimit.js';
+import { getProjectActiveBranch } from '../../src/db/proxyDb.js';
 
 export default async function handler(req: any, res: any) {
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -28,14 +30,16 @@ export default async function handler(req: any, res: any) {
     }
 
     try {
+        const activeBranch = await getProjectActiveBranch(db, user.projectId);
+
         // First, find the API and check its parent folder access
-        const apis = await db.query<any>('SELECT folder_id FROM api_collections WHERE id = ? AND project_id = ?', [id, user.projectId]);
+        const apis = await db.query<any>('SELECT folder_id FROM api_collections WHERE id = ? AND branch = ? AND project_id = ?', [id, activeBranch, user.projectId]);
         if (apis.length === 0) return res.status(404).json({ error: 'API not found' });
         const folderId = apis[0].folder_id;
 
         if (req.method === 'GET') {
             await checkFolderAccess(context, folderId, 'read');
-            const data = await db.query('SELECT * FROM api_collections WHERE id = ?', [id]);
+            const data = await db.query('SELECT * FROM api_collections WHERE id = ? AND branch = ?', [id, activeBranch]);
             return res.status(200).json(data[0]);
         }
 
@@ -44,7 +48,7 @@ export default async function handler(req: any, res: any) {
             const {
                 name, description, method, path,
                 url_params, headers, body_type, raw_type, form_data, urlencoded,
-                request_body, response_examples, version
+                request_body, response_examples
             } = req.body;
 
             await db.execute(
@@ -52,15 +56,20 @@ export default async function handler(req: any, res: any) {
           name = ?, description = ?, method = ?, path = ?, 
           url_params = ?, headers = ?, body_type = ?, raw_type = ?,
           form_data = ?, urlencoded = ?, 
-          request_body = ?, response_examples = ?, version = ?, sync_status = ?
-        WHERE id = ?`,
+          request_body = ?, response_examples = ?, version = version + 1, sync_status = ?
+        WHERE id = ? AND branch = ?`,
                 [
                     name, description, method, path,
                     JSON.stringify(url_params), JSON.stringify(headers), body_type, raw_type,
                     JSON.stringify(form_data), JSON.stringify(urlencoded),
-                    request_body, JSON.stringify(response_examples), version, 'synced',
-                    id
+                    request_body, JSON.stringify(response_examples), 'synced',
+                    id, activeBranch
                 ]
+            );
+
+            await db.execute(
+                `INSERT INTO sync_queue (id, project_id, local_id, branch, table_name, operation, data, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                [crypto.randomUUID(), user.projectId, id, activeBranch, 'apiCollections', 'update', JSON.stringify(req.body), 'pending']
             );
 
             return res.status(200).json({ success: true });
@@ -68,7 +77,18 @@ export default async function handler(req: any, res: any) {
 
         if (req.method === 'DELETE') {
             await checkFolderAccess(context, folderId, 'write');
-            await db.execute('DELETE FROM api_collections WHERE id = ?', [id]);
+            
+            // Soft delete
+            await db.execute(
+                'UPDATE api_collections SET is_deleted = 1, deleted_at = NOW(), version = version + 1, sync_status = ? WHERE id = ? AND branch = ?',
+                ['synced', id, activeBranch]
+            );
+            
+            await db.execute(
+                `INSERT INTO sync_queue (id, project_id, local_id, branch, table_name, operation, data, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                [crypto.randomUUID(), user.projectId, id, activeBranch, 'apiCollections', 'delete', JSON.stringify({ id }), 'pending']
+            );
+
             return res.status(200).json({ success: true });
         }
 
@@ -77,3 +97,4 @@ export default async function handler(req: any, res: any) {
         return res.status(500).json({ error: err.message });
     }
 }
+

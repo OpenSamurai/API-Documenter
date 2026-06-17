@@ -84,6 +84,60 @@ export async function ensureSchema(adapter: DbAdapter) {
                 }
             }
         }
+        // 4. Add updated_at to all tables
+        const tablesToUpdate = ['projects', 'folders', 'api_collections', 'rbac_users', 'environments'];
+        for (const tableName of tablesToUpdate) {
+            try {
+                await adapter.execute(`ALTER TABLE ${tableName} ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`);
+                console.log(`[Schema] Column updated_at processed for ${tableName}.`);
+            } catch (e: any) {
+                // Fallback for older MySQL
+                try {
+                    await adapter.execute(`ALTER TABLE ${tableName} ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`);
+                    console.log(`[Schema] Column updated_at added to ${tableName} (fallback).`);
+                } catch (e2: any) {
+                    if (!e2.message.toLowerCase().includes('already exists') && !e2.message.toLowerCase().includes('duplicate')) {
+                        console.error(`[Schema] Error adding updated_at to ${tableName}:`, e2.message);
+                    }
+                }
+            }
+        }
+
+        // 5. Add version, is_deleted, deleted_at to all data tables
+        const dataTables = ['projects', 'folders', 'api_collections', 'environments'];
+        for (const tableName of dataTables) {
+            const newCols = [
+                { name: 'version', type: 'INT DEFAULT 1' },
+                { name: 'is_deleted', type: 'BOOLEAN DEFAULT FALSE' },
+                { name: 'deleted_at', type: 'TIMESTAMP NULL' }
+            ];
+            for (const col of newCols) {
+                try {
+                    await adapter.execute(`ALTER TABLE ${tableName} ADD COLUMN IF NOT EXISTS ${col.name} ${col.type}`);
+                    console.log(`[Schema] Column ${col.name} processed for ${tableName}.`);
+                } catch (e: any) {
+                    try {
+                        await adapter.execute(`ALTER TABLE ${tableName} ADD COLUMN ${col.name} ${col.type}`);
+                        console.log(`[Schema] Column ${col.name} added to ${tableName} (fallback).`);
+                    } catch (e2: any) {
+                        if (!e2.message.toLowerCase().includes('already exists') && !e2.message.toLowerCase().includes('duplicate')) {
+                            console.error(`[Schema] Error adding ${col.name} to ${tableName}:`, e2.message);
+                        }
+                    }
+                }
+            }
+        }
+
+        // 6. Ensure synced_branches exists on projects
+        try {
+            await adapter.execute('ALTER TABLE projects ADD COLUMN IF NOT EXISTS synced_branches TEXT');
+        } catch (e: any) {
+            try {
+                await adapter.execute('ALTER TABLE projects ADD COLUMN synced_branches TEXT');
+            } catch (e2: any) {
+                // ignore duplicate
+            }
+        }
     } catch (err: any) {
         console.error('[Schema] Migration error:', err.message);
     }
@@ -143,3 +197,24 @@ export async function getApisByFolder(adapter: DbAdapter, folderId: string, proj
     const rows = await adapter.query<any>('SELECT * FROM api_collections WHERE folder_id = ? AND project_id = ?', [folderId, projectId]);
     return rows;
 }
+
+export async function getProjectActiveBranch(adapter: DbAdapter, projectId: string): Promise<string> {
+    try {
+        const rows = await adapter.query<any>(
+            'SELECT synced_branches FROM projects WHERE id = ?',
+            [projectId]
+        );
+        if (rows && rows.length > 0 && rows[0].synced_branches) {
+            const parsed = typeof rows[0].synced_branches === 'string'
+                ? JSON.parse(rows[0].synced_branches)
+                : rows[0].synced_branches;
+            if (Array.isArray(parsed) && parsed.length > 0 && parsed[0]) {
+                return parsed[0];
+            }
+        }
+    } catch (e) {
+        console.error('[proxyDb] Failed to fetch active branch:', e);
+    }
+    return 'main';
+}
+

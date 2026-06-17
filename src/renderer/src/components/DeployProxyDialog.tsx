@@ -38,7 +38,7 @@ export function DeployProxyDialog() {
                 projectName: project.name
             })) as any
             if (res.success) {
-                const now = Date.now()
+                const now = new Date().toISOString()
                 setDeployOutput(prev => [...prev, '\n✅ Deployment successful!'])
 
                 await updateProject.mutateAsync({

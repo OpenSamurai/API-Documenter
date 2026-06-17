@@ -3,8 +3,8 @@ import { db } from '@/db'
 import type { Environment } from '@/types'
 import { v4 as uuid } from 'uuid'
 import { useAppStore } from '@/stores/appStore'
-import { performSync } from './useSync'
 import { getProjectLocalPath, fireAndForgetFileWrite } from '@/utils/fileSync'
+import { upsertSyncQueueItem } from '@/utils/syncQueueUtils'
 
 export function useEnvironments(projectId: string | null) {
     const { isTeamWorkspace, teamConfig } = useAppStore()
@@ -40,7 +40,8 @@ export function useEnvironments(projectId: string | null) {
                     variables: '{}',
                     lastSync: null,
                     syncStatus: 'synced',
-                    createdAt: Date.now()
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString()
                 }
                 await db.environments.add(globalEnv)
 
@@ -53,16 +54,18 @@ export function useEnvironments(projectId: string | null) {
                 }
 
                 // Queue sync to make sure it exists on remote too
+                const { activeBranch } = useAppStore.getState()
                 await db.syncQueue.add({
                     id: uuid(),
                     localId: globalEnv.id,
                     projectId: globalEnv.projectId,
+                    branch: activeBranch || 'main',
                     tableName: 'environments',
                     operation: 'create',
                     data: JSON.stringify(globalEnv),
-                    status: 'pending',
+                    status: 'uncommitted',
                     retries: 0,
-                    createdAt: Date.now()
+                    createdAt: new Date().toISOString()
                 })
 
                 return [globalEnv, ...localEnvs]
@@ -90,7 +93,8 @@ export function useCreateEnvironment() {
                 variables: data.variables || '{}',
                 lastSync: null,
                 syncStatus: 'pending',
-                createdAt: Date.now()
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
             }
 
             if (isTeamWorkspace) {
@@ -124,24 +128,24 @@ export function useCreateEnvironment() {
             }
 
             // Queue sync
+            const { activeBranch } = useAppStore.getState()
             await db.syncQueue.add({
                 id: uuid(),
                 localId: env.id,
                 projectId: env.projectId,
+                branch: activeBranch || 'main',
                 tableName: 'environments',
                 operation: 'create',
                 data: JSON.stringify(env),
                 status: 'pending',
                 retries: 0,
-                createdAt: Date.now()
+                createdAt: new Date().toISOString()
             })
 
             return env
         },
         onSuccess: (env) => {
             qc.invalidateQueries({ queryKey: ['environments', env.projectId] })
-            const { proxyConnection } = useAppStore.getState()
-            performSync(qc, proxyConnection, env.projectId)
         }
     })
 }
@@ -172,7 +176,9 @@ export function useUpdateEnvironment() {
                 return env
             }
 
-            const updatedEnv = { ...env, syncStatus: 'pending' as any }
+            const oldEnv = await db.environments.get(env.id)
+            const newVersion = (oldEnv?.version || 1) + 1
+            const updatedEnv = { ...env, version: newVersion, syncStatus: 'uncommitted' as any, updatedAt: new Date().toISOString() }
             await db.environments.update(env.id, updatedEnv)
 
             // Write to disk
@@ -183,25 +189,22 @@ export function useUpdateEnvironment() {
                 )
             }
 
-            // Queue sync
-            await db.syncQueue.add({
-                id: uuid(),
+            // Queue sync (upsert)
+            const { activeBranch } = useAppStore.getState()
+            await upsertSyncQueueItem({
                 localId: env.id,
                 projectId: env.projectId,
+                branch: activeBranch || 'main',
                 tableName: 'environments',
                 operation: 'update',
                 data: JSON.stringify(updatedEnv),
-                status: 'pending',
-                retries: 0,
-                createdAt: Date.now()
+                version: newVersion
             })
 
             return env
         },
         onSuccess: (env) => {
             qc.invalidateQueries({ queryKey: ['environments', env.projectId] })
-            const { proxyConnection } = useAppStore.getState()
-            performSync(qc, proxyConnection, env.projectId)
         }
     })
 }
@@ -240,25 +243,22 @@ export function useDeleteEnvironment() {
 
                 await db.environments.delete(id)
 
-                // Queue sync
-                await db.syncQueue.add({
-                    id: uuid(),
+                // Queue sync (upsert)
+                const { activeBranch } = useAppStore.getState()
+                await upsertSyncQueueItem({
                     localId: id,
                     projectId: projectId,
+                    branch: activeBranch || 'main',
                     tableName: 'environments',
                     operation: 'delete',
                     data: JSON.stringify({ id }),
-                    status: 'pending',
-                    retries: 0,
-                    createdAt: Date.now()
+                    version: (env as any).version
                 })
             }
             return { id, projectId }
         },
         onSuccess: ({ projectId }) => {
             qc.invalidateQueries({ queryKey: ['environments', projectId] })
-            const { proxyConnection } = useAppStore.getState()
-            performSync(qc, proxyConnection, projectId)
         }
     })
 }

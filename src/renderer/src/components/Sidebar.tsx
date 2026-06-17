@@ -13,16 +13,31 @@ import { EnvironmentSelector } from './EnvironmentSelector'
 
 export function Sidebar() {
     const qc = useQueryClient()
-    const {
-        currentProjectId, currentFolderId, currentApiId,
-        selectProject, selectFolder, selectApi,
-        setShowCreateProject, setShowCreateFolder, setShowCreateApi,
-        setShowDatabaseSettings, setShowRbacSettings, setShowDeploySettings, setShowGeneralSettings,
-        setShowTeamConnect, setShowApiDocumentation,
-        setEditingFolderId, isSidebarCollapsed, toggleSidebar,
-        isTeamWorkspace, teamConfig, setTeamWorkspace,
-        isSyncing
-    } = useAppStore()
+    const currentProjectId = useAppStore(s => s.currentProjectId)
+    const currentFolderId = useAppStore(s => s.currentFolderId)
+    const currentApiId = useAppStore(s => s.currentApiId)
+    const selectProject = useAppStore(s => s.selectProject)
+    const selectFolder = useAppStore(s => s.selectFolder)
+    const selectApi = useAppStore(s => s.selectApi)
+    const setShowCreateProject = useAppStore(s => s.setShowCreateProject)
+    const setShowCreateFolder = useAppStore(s => s.setShowCreateFolder)
+    const setShowCreateApi = useAppStore(s => s.setShowCreateApi)
+    const setShowDatabaseSettings = useAppStore(s => s.setShowDatabaseSettings)
+    const setShowRbacSettings = useAppStore(s => s.setShowRbacSettings)
+    const setShowDeploySettings = useAppStore(s => s.setShowDeploySettings)
+    const setShowGeneralSettings = useAppStore(s => s.setShowGeneralSettings)
+    const setShowTeamConnect = useAppStore(s => s.setShowTeamConnect)
+    const setShowApiDocumentation = useAppStore(s => s.setShowApiDocumentation)
+    const setEditingFolderId = useAppStore(s => s.setEditingFolderId)
+    const isSidebarCollapsed = useAppStore(s => s.isSidebarCollapsed)
+    const toggleSidebar = useAppStore(s => s.toggleSidebar)
+    const isTeamWorkspace = useAppStore(s => s.isTeamWorkspace)
+    const teamConfig = useAppStore(s => s.teamConfig)
+    const setTeamWorkspace = useAppStore(s => s.setTeamWorkspace)
+    const isSyncing = useAppStore(s => s.isSyncing)
+    const databaseUrl = useAppStore(s => s.databaseUrl)
+    const activeBranch = useAppStore(s => s.activeBranch)
+    const currentSyncBranch = useAppStore(s => s.currentSyncBranch)
 
     const { data: projects } = useProjects()
     const { data: folders, isLoading: isFoldersLoading, error: foldersError } = useFolders(currentProjectId)
@@ -41,7 +56,12 @@ export function Sidebar() {
         ; (window as any).electronAPI.getAppVersion().then(setVersion)
     }, [])
 
-    useEffect(() => { const h = () => { setCtx(null); setProjectDdOpen(false) }; window.addEventListener('click', h); return () => window.removeEventListener('click', h) }, [])
+    // Remove the old window listener that was conflicting with button clicks
+    useEffect(() => {
+        const handleEscape = (e: KeyboardEvent) => { if (e.key === 'Escape') { setCtx(null); setProjectDdOpen(false); } }
+        window.addEventListener('keydown', handleEscape)
+        return () => window.removeEventListener('keydown', handleEscape)
+    }, [])
 
     const toggle = (id: string) => {
         setExpanded(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
@@ -49,6 +69,7 @@ export function Sidebar() {
     }
     const onCtx = (e: React.MouseEvent, type: 'folder' | 'api', id: string) => {
         e.preventDefault();
+        e.stopPropagation();
         setCtx({ x: e.clientX, y: e.clientY, type, id })
     }
 
@@ -154,6 +175,11 @@ export function Sidebar() {
 
                         {/* Floating Menu */}
                         {projectDdOpen && (
+                            <>
+                                <div 
+                                    style={{ position: 'fixed', inset: 0, zIndex: 2999 }} 
+                                    onClick={() => setProjectDdOpen(false)} 
+                                />
                                 <div className="fade-in scale-in z-[3000]"
                                     style={{
                                         position: 'absolute', top: '100%', left: '0', right: '0', marginTop: '8px',
@@ -228,6 +254,7 @@ export function Sidebar() {
                                     </>
                                 )}
                             </div>
+                            </>
                         )}
 
                         {isTeamWorkspace && (
@@ -250,19 +277,21 @@ export function Sidebar() {
                     {currentProjectId && (
                         <div style={{ padding: '16px 16px 8px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                             <p style={{ color: '#6B7280', margin: 0, fontSize: 'calc(10px * var(--font-scale))', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Folders</p>
-                            <button
-                                onClick={() => syncNow()}
-                                disabled={isSyncing}
-                                className="flex items-center gap-1.5 px-2 py-1 rounded bg-white/5 hover:bg-white/10 text-[10px] font-bold text-neutral-400 hover:text-white transition-all border border-white/5"
-                            >
-                                <div style={{ animation: isSyncing ? 'spin 1s linear infinite' : 'none' }}>
-                                    <svg width="10" height="10" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                        <path d="M13 7a6 6 0 1 1-1-3.2L11 5" />
-                                        <polyline points="13 2 13 5 10 5" />
-                                    </svg>
-                                </div>
-                                {isSyncing ? 'Syncing...' : 'Sync with database'}
-                            </button>
+                            {databaseUrl && activeBranch === currentSyncBranch && (
+                                <button
+                                    onClick={() => syncNow(true)}
+                                    disabled={isSyncing}
+                                    className="flex items-center gap-1.5 px-2 py-1 rounded bg-white/5 hover:bg-white/10 text-[10px] font-bold text-neutral-400 hover:text-white transition-all border border-white/5"
+                                >
+                                    <div style={{ animation: isSyncing ? 'spin 1s linear infinite' : 'none' }}>
+                                        <svg width="10" height="10" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                            <path d="M13 7a6 6 0 1 1-1-3.2L11 5" />
+                                            <polyline points="13 2 13 5 10 5" />
+                                        </svg>
+                                    </div>
+                                    {isSyncing ? 'Syncing...' : 'Sync with database'}
+                                </button>
+                            )}
                         </div>
                     )}
 
@@ -295,7 +324,7 @@ export function Sidebar() {
                                         isOpen={expanded.has(f.id)} isActive={currentFolderId === f.id}
                                         activeApi={currentApiId}
                                         onToggle={() => toggle(f.id)} onSelectApi={(apiId) => selectApi(apiId, f.id)}
-                                        onCtx={onCtx} />
+                                        onCtx={onCtx} ctx={ctx} setCtx={setCtx} databaseUrl={databaseUrl} />
                                 ))}
                             </div>
                         )}
@@ -342,18 +371,20 @@ export function Sidebar() {
                                     <div style={{ height: '1px', background: '#1A1A1A', margin: '4px 8px' }} />
 
                                     {!isTeamWorkspace && (
-                                        <ActionBtn icon="database" label="Database" onClick={() => setShowDatabaseSettings(true)} />
-                                    )}
-
-                                    {hasDb && !isTeamWorkspace && (
-                                        <>
-                                            <ActionBtn icon="users" label="Team (RBAC)" onClick={() => setShowRbacSettings(true)} />
-                                            <ActionBtn icon="deploy" label="Deploy Proxy" onClick={() => setShowDeploySettings(true)} />
-                                        </>
+                                        <ActionBtn icon="settings" label="Project Settings" onClick={() => setShowGeneralSettings(true)} />
                                     )}
 
                                     {!isTeamWorkspace && (
                                         <ActionBtn icon="settings" label="Project Settings" onClick={() => setShowGeneralSettings(true)} />
+                                    )}
+
+                                    {!isTeamWorkspace && (
+                                        <ActionBtn 
+                                            icon="deploy" 
+                                            label={isSyncing ? 'Pushing...' : 'Push all to branch'} 
+                                            onClick={() => syncNow(false, true)} 
+                                            disabled={isSyncing}
+                                        />
                                     )}
 
                                     {!isTeamWorkspace && (
@@ -387,74 +418,93 @@ export function Sidebar() {
 
             {/* ══ Context menu ══ */}
             {ctx && (
-                <div className="fixed z-[2000] scale-in"
-                    style={{
-                        left: ctx.x, top: ctx.y, padding: '6px', minWidth: '200px',
-                        background: '#141414', border: '1px solid #222', borderRadius: '12px',
-                        boxShadow: '0 12px 48px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.05)'
-                    }}>
-                    {ctx.type === 'folder' && (() => {
-                        const folder = folders?.find(f => f.id === ctx.id);
-                        const isViewer = (folder as any)?.role === 'viewer';
-                        const isAdmin = (folder as any)?.role === 'admin';
-                        if (isViewer) return null;
+                <>
+                    <div 
+                        style={{ position: 'fixed', inset: 0, zIndex: 1999 }} 
+                        onClick={() => setCtx(null)} 
+                        onContextMenu={(e) => { e.preventDefault(); setCtx(null); }}
+                    />
+                    <div className="fixed z-[2000] scale-in"
+                        style={{
+                            left: Math.min(ctx.x, window.innerWidth - 220), 
+                            top: Math.min(ctx.y, window.innerHeight - 300), 
+                            padding: '6px', minWidth: '200px',
+                            background: '#141414', border: '1px solid #222', borderRadius: '12px',
+                            boxShadow: '0 12px 48px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.05)',
+                            animation: 'fadeUp 150ms ease'
+                        }}>
+                        {ctx.type === 'folder' && (() => {
+                            const folder = folders?.find(f => f.id === ctx.id);
+                            const isViewer = (folder as any)?.role === 'viewer';
+                            const isAdmin = (folder as any)?.role === 'admin';
+                            if (isViewer) return <div style={{ padding: '8px 12px', color: '#6B7280', fontSize: '11px' }}>Read-only folder</div>;
 
-                        return (
-                            <>
-                                <CtxBtn onClick={() => { setEditingFolderId(ctx.id); setShowCreateFolder(true); setCtx(null) }}>
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '10px', opacity: 0.6 }}><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
-                                    Edit folder
-                                </CtxBtn>
-                                <CtxBtn onClick={() => { selectFolder(ctx.id); setShowCreateApi(true); setCtx(null) }}>
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '10px', opacity: 0.6 }}><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-                                    Add endpoint
-                                </CtxBtn>
-                                {(!isTeamWorkspace || isAdmin) && (
-                                    <>
-                                        <div style={{ height: '1px', background: '#222', margin: '6px 8px' }} />
-                                        <CtxBtn
-                                            onClick={() => { setConfirmDelete({ type: ctx.type, id: ctx.id }); setCtx(null) }}
-                                            style={{ color: '#EF4444' }}
-                                        >
-                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '10px', opacity: 0.8 }}><path d="M3 6h18m-2 0v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6m3 0V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" /></svg>
-                                            Delete folder
-                                        </CtxBtn>
-                                    </>
-                                )}
-                            </>
-                        );
-                    })()}
-
-                    {ctx.type === 'api' && (() => {
-                        const api = (window as any)._allApis?.find((a: any) => a.id === ctx.id); // Hacky or we need a better way
-                        // For now, let's just use the selected folder's role if we can find it
-                        const folder = folders?.find(f => f.id === currentFolderId);
-                        const isViewer = (folder as any)?.role === 'viewer';
-                        const isAdmin = (folder as any)?.role === 'admin';
-
-                        return (
-                            <>
-                                {(!isTeamWorkspace || !isViewer) && (
-                                    <CtxBtn
-                                        onClick={() => {
-                                            setConfirmDelete({
-                                                type: ctx.type,
-                                                id: ctx.id,
-                                                folderId: currentFolderId || '',
-                                                projectId: currentProjectId || ''
-                                            });
-                                            setCtx(null)
-                                        }}
-                                        style={{ color: '#EF4444' }}
-                                    >
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '10px', opacity: 0.8 }}><path d="M3 6h18m-2 0v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6m3 0V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" /></svg>
-                                        Delete endpoint
+                            return (
+                                <>
+                                    <CtxBtn onClick={() => { setEditingFolderId(ctx.id); setShowCreateFolder(true); setCtx(null) }}>
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '10px', opacity: 0.6 }}><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
+                                        Edit folder
                                     </CtxBtn>
-                                )}
-                            </>
-                        );
-                    })()}
-                </div>
+                                    <CtxBtn onClick={() => { selectFolder(ctx.id); setShowCreateApi(true); setCtx(null) }}>
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '10px', opacity: 0.6 }}><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                                        Add endpoint
+                                    </CtxBtn>
+                                    {(!isTeamWorkspace || isAdmin) && (
+                                        <>
+                                            <div style={{ height: '1px', background: '#222', margin: '6px 8px' }} />
+                                            <CtxBtn
+                                                onClick={() => { setConfirmDelete({ type: ctx.type, id: ctx.id }); setCtx(null) }}
+                                                style={{ color: '#EF4444' }}
+                                            >
+                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '10px', opacity: 0.8 }}><path d="M3 6h18m-2 0v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6m3 0V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" /></svg>
+                                                Delete folder
+                                            </CtxBtn>
+                                        </>
+                                    )}
+                                </>
+                            );
+                        })()}
+
+                        {ctx.type === 'api' && (() => {
+                            const folder = folders?.find(f => f.id === currentFolderId);
+                            const isViewer = (folder as any)?.role === 'viewer';
+
+                            return (
+                                <>
+                                    <CtxBtn onClick={() => { 
+                                        const api = (window as any)._allApis?.find((a: any) => a.id === ctx.id);
+                                        selectApi(ctx.id, currentFolderId || '');
+                                        setCtx(null);
+                                    }}>
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '10px', opacity: 0.6 }}><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                                        Open endpoint
+                                    </CtxBtn>
+                                    
+                                    {(!isTeamWorkspace || !isViewer) && (
+                                        <>
+                                            <div style={{ height: '1px', background: '#222', margin: '6px 8px' }} />
+                                            <CtxBtn
+                                                onClick={() => {
+                                                    setConfirmDelete({
+                                                        type: ctx.type,
+                                                        id: ctx.id,
+                                                        folderId: currentFolderId || '',
+                                                        projectId: currentProjectId || ''
+                                                    });
+                                                    setCtx(null)
+                                                }}
+                                                style={{ color: '#EF4444' }}
+                                            >
+                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '10px', opacity: 0.8 }}><path d="M3 6h18m-2 0v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6m3 0V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" /></svg>
+                                                Delete endpoint
+                                            </CtxBtn>
+                                        </>
+                                    )}
+                                </>
+                            );
+                        })()}
+                    </div>
+                </>
             )}
 
             {/* ══ Confirm Modal ══ */}
@@ -479,9 +529,10 @@ interface FolderItemProps {
     folder: Folder; isOpen: boolean; isActive: boolean; activeApi: string | null
     onToggle: () => void; onSelectApi: (apiId: string, folderId: string) => void
     onCtx: (e: React.MouseEvent, t: 'folder' | 'api', id: string) => void
+    ctx: any; setCtx: (ctx: any) => void; databaseUrl: string | null
 }
 
-function FolderItem({ folder, isOpen, isActive, activeApi, onToggle, onSelectApi, onCtx }: FolderItemProps) {
+function FolderItem({ folder, isOpen, isActive, activeApi, onToggle, onSelectApi, onCtx, ctx, setCtx, databaseUrl }: FolderItemProps) {
     const { data: apis, isLoading, error } = useApis(isOpen ? folder.id : null)
 
     return (
@@ -508,17 +559,21 @@ function FolderItem({ folder, isOpen, isActive, activeApi, onToggle, onSelectApi
                     {folder.name}
                 </span>
 
-                {/* Role indicator for Team Workspace */}
-                {(folder as any).role && (
-                    <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border"
-                        style={{
-                            color: (folder as any).role === 'admin' ? '#F87171' : (folder as any).role === 'editor' ? '#60A5FA' : '#9CA3AF',
-                            borderColor: (folder as any).role === 'admin' ? '#991B1B' : (folder as any).role === 'editor' ? '#1E40AF' : '#374151',
-                            background: 'rgba(0,0,0,0.3)'
-                        }}>
-                        {(folder as any).role}
-                    </span>
-                )}
+                {/* 3 dots menu button */}
+                <button
+                    className={`p-1.5 rounded-md hover:bg-white/10 transition-all ${ctx?.id === folder.id ? 'opacity-100 bg-white/10 text-white' : 'opacity-0 group-hover:opacity-100 text-neutral-500 hover:text-white'}`}
+                    onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        // Position it slightly to the left of the button to avoid being cut off
+                        setCtx({ x: rect.left - 180, y: rect.bottom + 8, type: 'folder', id: folder.id });
+                    }}
+                >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="1" /><circle cx="12" cy="5" r="1" /><circle cx="12" cy="19" r="1" />
+                    </svg>
+                </button>
             </div>
 
             {/* API items — indented */}
@@ -570,9 +625,25 @@ function FolderItem({ folder, isOpen, isActive, activeApi, onToggle, onSelectApi
                                 })()}
 
                                 <span className="text-[13px] font-medium truncate"
-                                    style={{ color: isAct ? '#FFFFFF' : '#9CA3AF', transition: '150ms ease' }}>
+                                    style={{ color: isAct ? '#FFFFFF' : '#9CA3AF', transition: '150ms ease', flex: 1 }}>
                                     {a.name || a.path}
                                 </span>
+
+                                {/* 3 dots menu button for API */}
+                                <button
+                                    className={`p-1.5 rounded-md hover:bg-white/10 transition-all ${ctx?.id === a.id ? 'opacity-100 bg-white/10 text-white' : 'opacity-0 group-hover:opacity-100 text-neutral-500 hover:text-white'}`}
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        const rect = e.currentTarget.getBoundingClientRect();
+                                        // Position it slightly to the left of the button
+                                        setCtx({ x: rect.left - 180, y: rect.bottom + 8, type: 'api', id: a.id });
+                                    }}
+                                >
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <circle cx="12" cy="12" r="1" /><circle cx="12" cy="5" r="1" /><circle cx="12" cy="19" r="1" />
+                                    </svg>
+                                </button>
                             </div>
                         )
                     })}
@@ -588,9 +659,9 @@ function FolderItem({ folder, isOpen, isActive, activeApi, onToggle, onSelectApi
    ═══════════════════════════════════════════════════════════════════ */
 function SyncAction({ currentProject }: { currentProject?: Project }) {
     const { syncNow } = useSync()
-    const { proxyConnection, isSyncing } = useAppStore()
+    const { proxyConnection, isSyncing, databaseUrl } = useAppStore()
 
-    const hasDirect = currentProject?.databaseUrl && currentProject.databaseUrl.trim() !== ''
+    const hasDirect = databaseUrl && databaseUrl.trim() !== ''
     const hasProxy = !!proxyConnection?.connected && !!proxyConnection?.proxyUrl
 
     if (!hasDirect && !hasProxy) return null

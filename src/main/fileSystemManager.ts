@@ -39,7 +39,7 @@ function ensureUniqueFilename(dirPath: string, baseName: string, ext: string): s
  */
 export function initProjectDirectory(
     dirPath: string,
-    project: { id: string; name: string; databaseUrl?: string; proxyUrl?: string; lastDeployedAt?: number; createdAt: number }
+    project: { id: string; name: string; databaseUrl?: string; proxyUrl?: string; lastDeployedAt?: number; createdAt: number, version?: number }
 ): { success: boolean; error?: string } {
     try {
         // Create root dir if needed
@@ -49,10 +49,11 @@ export function initProjectDirectory(
 
         // project.apidoc — public metadata (git-tracked)
         const projectMeta = {
-            version: 1,
+            version: project.version || 1,
             id: project.id,
             name: project.name,
-            createdAt: project.createdAt
+            createdAt: project.createdAt,
+            updatedAt: new Date().toISOString()
         }
         fs.writeFileSync(
             path.join(dirPath, 'project.apidoc'),
@@ -65,6 +66,7 @@ export function initProjectDirectory(
             databaseUrl: project.databaseUrl || '',
             proxyUrl: project.proxyUrl || '',
             lastDeployedAt: project.lastDeployedAt || null,
+            currentSyncBranch: '', // Tracks the currently 'connected' sync branch
             teamConnections: []
         }
         fs.writeFileSync(
@@ -98,6 +100,18 @@ export function initProjectDirectory(
             // We do not fail the project creation if git is simply not installed
         }
 
+        // .sync-meta.json (new flat format)
+        const syncMeta = {
+            branch: 'main',
+            lastSyncedCommit: '',
+            entities: {}
+        }
+        fs.writeFileSync(
+            path.join(dirPath, '.sync-meta.json'),
+            JSON.stringify(syncMeta, null, 2),
+            'utf-8'
+        )
+
         return { success: true }
     } catch (error: any) {
         return { success: false, error: error.message }
@@ -111,14 +125,15 @@ export function initProjectDirectory(
  */
 export function writeProjectMeta(
     dirPath: string,
-    project: { id: string; name: string; createdAt: number }
+    project: { id: string; name: string; createdAt: number, version?: number }
 ): { success: boolean; error?: string } {
     try {
         const projectMeta = {
-            version: 1,
+            version: project.version || 1,
             id: project.id,
             name: project.name,
-            createdAt: project.createdAt
+            createdAt: project.createdAt,
+            updatedAt: new Date().toISOString()
         }
         fs.writeFileSync(
             path.join(dirPath, 'project.apidoc'),
@@ -136,7 +151,7 @@ export function writeProjectMeta(
  */
 export function writeProjectSecrets(
     dirPath: string,
-    secrets: { databaseUrl?: string; proxyUrl?: string; lastDeployedAt?: number | null; teamConnections?: any[] }
+    secrets: { databaseUrl?: string; proxyUrl?: string; lastDeployedAt?: number | null; teamConnections?: any[]; currentSyncBranch?: string | null }
 ): { success: boolean; error?: string } {
     try {
         // Read existing secrets to preserve fields we don't want to overwrite
@@ -159,6 +174,35 @@ export function writeProjectSecrets(
     }
 }
 
+/**
+ * Update .sync-meta.json
+ */
+export function writeSyncMeta(dirPath: string, data: any): { success: boolean; error?: string } {
+    try {
+        const syncPath = path.join(dirPath, '.sync-meta.json')
+        fs.writeFileSync(syncPath, JSON.stringify(data, null, 2), 'utf-8')
+        return { success: true }
+    } catch (error: any) {
+        return { success: false, error: error.message }
+    }
+}
+
+/**
+ * Read .sync-meta.json
+ */
+export function readSyncMeta(dirPath: string): { success: boolean; data?: any; error?: string } {
+    try {
+        const syncPath = path.join(dirPath, '.sync-meta.json')
+        if (!fs.existsSync(syncPath)) {
+            return { success: true, data: null }
+        }
+        const data = JSON.parse(fs.readFileSync(syncPath, 'utf-8'))
+        return { success: true, data }
+    } catch (error: any) {
+        return { success: false, error: error.message }
+    }
+}
+
 // ─── Folder Operations ──────────────────────────────────────────
 
 /**
@@ -167,7 +211,7 @@ export function writeProjectSecrets(
  */
 export function writeFolderMeta(
     dirPath: string,
-    folder: { id: string; name: string; description: string; orderIndex: number; createdAt: number }
+    folder: { id: string; name: string; description: string; orderIndex: number; createdAt: number, version?: number }
 ): { success: boolean; folderDirName?: string; error?: string } {
     try {
         const foldersRoot = path.join(dirPath, 'folders')
@@ -182,11 +226,13 @@ export function writeFolderMeta(
         }
 
         const meta = {
+            version: folder.version || 1,
             id: folder.id,
             name: folder.name,
             description: folder.description,
             orderIndex: folder.orderIndex,
-            createdAt: folder.createdAt
+            createdAt: folder.createdAt,
+            updatedAt: new Date().toISOString()
         }
         fs.writeFileSync(
             path.join(folderDir, 'folder.json'),
@@ -327,7 +373,8 @@ export function writeApiFile(
             requestBody: api.requestBody || '',
             responseExamples: api.responseExamples || [],
             version: api.version || 1,
-            createdAt: api.createdAt
+            createdAt: api.createdAt,
+            updatedAt: new Date().toISOString()
         }
 
         fs.writeFileSync(
@@ -399,7 +446,7 @@ export function writeEnvironmentFile(
     env: {
         id: string; name: string; baseUrl: string; isGlobal: boolean;
         folderId?: string | null; variables: string | Record<string, string>;
-        createdAt: number;
+        createdAt: number; version?: number;
     }
 ): { success: boolean; fileName?: string; error?: string } {
     try {
@@ -428,13 +475,15 @@ export function writeEnvironmentFile(
         }
 
         const envData = {
+            version: env.version || 1,
             id: env.id,
             name: env.name,
             baseUrl: env.baseUrl,
             isGlobal: env.isGlobal,
             folderId: env.folderId || null,
             variables,
-            createdAt: env.createdAt
+            createdAt: env.createdAt,
+            updatedAt: new Date().toISOString()
         }
 
         fs.writeFileSync(

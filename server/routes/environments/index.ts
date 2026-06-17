@@ -1,6 +1,8 @@
 import { authenticate } from '../../src/middleware/auth.js';
+import crypto from 'crypto';
 import { checkFolderAccess } from '../../src/middleware/rbac.js';
 import { rateLimit } from '../../src/middleware/rateLimit.js';
+import { getProjectActiveBranch } from '../../src/db/proxyDb.js';
 
 export default async function handler(req: any, res: any) {
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -22,8 +24,13 @@ export default async function handler(req: any, res: any) {
     const { db, user } = context;
 
     try {
+        const activeBranch = await getProjectActiveBranch(db, user.projectId);
+
         if (req.method === 'GET') {
-            const results = await db.query('SELECT * FROM environments WHERE project_id = ?', [user.projectId]);
+            const results = await db.query(
+                'SELECT * FROM environments WHERE project_id = ? AND branch = ? AND (is_deleted = 0 OR is_deleted = false OR is_deleted IS NULL)',
+                [user.projectId, activeBranch]
+            );
 
             // Ensure a Global environment exists at the database level if not present
             let foundGlobal = results.find((e: any) => Number(e.is_global) === 1);
@@ -31,13 +38,14 @@ export default async function handler(req: any, res: any) {
                 const globalId = `global-${user.projectId}`;
                 try {
                     await db.execute(
-                        'INSERT INTO environments (id, project_id, name, is_global, variables) VALUES (?, ?, ?, ?, ?)',
-                        [globalId, user.projectId, 'Global', 1, '{}']
+                        'INSERT INTO environments (id, project_id, branch, name, is_global, variables) VALUES (?, ?, ?, ?, ?, ?)',
+                        [globalId, user.projectId, activeBranch, 'Global', 1, '{}']
                     );
                     // Add it to the results list manually so the current response is complete
                     results.push({
                         id: globalId,
                         project_id: user.projectId,
+                        branch: activeBranch,
                         name: 'Global',
                         is_global: 1,
                         variables: '{}',
@@ -46,7 +54,7 @@ export default async function handler(req: any, res: any) {
                 } catch (e) {
                     // Might already exist but wasn't in original SELECT results (race condition or ID format)
                     // We'll re-fetch just to be safe if insert fails
-                    const refetch = await db.query('SELECT * FROM environments WHERE id = ?', [globalId]);
+                    const refetch = await db.query('SELECT * FROM environments WHERE id = ? AND branch = ?', [globalId, activeBranch]);
                     if (refetch.length > 0) results.push(refetch[0]);
                 }
             }
@@ -100,8 +108,13 @@ export default async function handler(req: any, res: any) {
             if (!id || !name) return res.status(400).json({ error: 'ID and Name are required' });
 
             await db.execute(
-                'INSERT INTO environments (id, project_id, folder_id, name, base_url, is_global, variables) VALUES (?, ?, ?, ?, ?, ?, ?)',
-                [id, user.projectId, folderId || null, name, baseUrl || '', isGlobal ? 1 : 0, variables || '{}']
+                'INSERT INTO environments (id, project_id, folder_id, branch, name, base_url, is_global, variables) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                [id, user.projectId, folderId || null, activeBranch, name, baseUrl || '', isGlobal ? 1 : 0, variables || '{}']
+            );
+
+            await db.execute(
+                `INSERT INTO sync_queue (id, project_id, local_id, branch, table_name, operation, data, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                [crypto.randomUUID(), user.projectId, id, activeBranch, 'environments', 'create', JSON.stringify(req.body), 'pending']
             );
 
             return res.status(201).json({ success: true });

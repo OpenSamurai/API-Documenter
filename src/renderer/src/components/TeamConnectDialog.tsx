@@ -45,7 +45,7 @@ export function TeamConnectDialog() {
                 url: connectUrl,
                 token: connectToken,
                 projectId: connectProjectId,
-                lastUsedAt: Date.now()
+                lastUsedAt: new Date().toISOString()
             })
 
             setProxyConnection({

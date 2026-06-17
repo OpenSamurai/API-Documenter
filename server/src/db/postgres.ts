@@ -11,6 +11,8 @@ export class PostgresAdapter implements DbAdapter {
             connectionString: url,
             ssl: { rejectUnauthorized: false } // Required for most serverless DBs like Neon
         });
+        // Set timezone to UTC for the pool
+        await this.pool.query("SET timezone = 'UTC'");
     }
 
     private convertPlaceholders(sql: string): string {

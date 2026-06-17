@@ -1,6 +1,8 @@
 import { authenticate } from '../../src/middleware/auth.js';
+import crypto from 'crypto';
 import { rateLimit } from '../../src/middleware/rateLimit.js';
 import { checkEnvironmentAccess } from '../../src/middleware/rbac.js';
+import { getProjectActiveBranch } from '../../src/db/proxyDb.js';
 
 export default async function handler(req: any, res: any) {
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -26,32 +28,48 @@ export default async function handler(req: any, res: any) {
     const { db, user } = context;
 
     try {
+        const activeBranch = await getProjectActiveBranch(db, user.projectId);
+
         if (req.method === 'PUT') {
             const { name, baseUrl, isGlobal, folderId, variables } = req.body;
 
             // Check if environment belongs to this project
-            const existing = await db.query('SELECT * FROM environments WHERE id = ? AND project_id = ?', [id, user.projectId]) as any[];
+            const existing = await db.query('SELECT * FROM environments WHERE id = ? AND branch = ? AND project_id = ?', [id, activeBranch, user.projectId]) as any[];
             if (!existing.length) return res.status(404).json({ error: 'Environment not found' });
 
             // Enforce RBAC
             await checkEnvironmentAccess(context, id, 'write', Number(existing[0].is_global) === 1);
 
             await db.execute(
-                'UPDATE environments SET name = ?, base_url = ?, is_global = ?, folder_id = ?, variables = ? WHERE id = ? AND project_id = ?',
-                [name, baseUrl || '', isGlobal ? 1 : 0, folderId || null, variables, id, user.projectId]
+                'UPDATE environments SET name = ?, base_url = ?, is_global = ?, folder_id = ?, variables = ?, version = version + 1 WHERE id = ? AND branch = ? AND project_id = ?',
+                [name, baseUrl || '', isGlobal ? 1 : 0, folderId || null, variables, id, activeBranch, user.projectId]
+            );
+
+            await db.execute(
+                `INSERT INTO sync_queue (id, project_id, local_id, branch, table_name, operation, data, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                [crypto.randomUUID(), user.projectId, id, activeBranch, 'environments', 'update', JSON.stringify(req.body), 'pending']
             );
 
             return res.status(200).json({ success: true });
         }
 
         if (req.method === 'DELETE') {
-            const existing = await db.query('SELECT * FROM environments WHERE id = ? AND project_id = ?', [id, user.projectId]) as any[];
+            const existing = await db.query('SELECT * FROM environments WHERE id = ? AND branch = ? AND project_id = ?', [id, activeBranch, user.projectId]) as any[];
             if (!existing.length) return res.status(404).json({ error: 'Environment not found' });
 
             // Enforce RBAC
             await checkEnvironmentAccess(context, id, 'delete', Number(existing[0].is_global) === 1);
 
-            await db.execute('DELETE FROM environments WHERE id = ? AND project_id = ?', [id, user.projectId]);
+            // Soft delete
+            await db.execute(
+                'UPDATE environments SET is_deleted = 1, deleted_at = NOW(), version = version + 1 WHERE id = ? AND branch = ? AND project_id = ?',
+                [id, activeBranch, user.projectId]
+            );
+
+            await db.execute(
+                `INSERT INTO sync_queue (id, project_id, local_id, branch, table_name, operation, data, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                [crypto.randomUUID(), user.projectId, id, activeBranch, 'environments', 'delete', JSON.stringify({ id }), 'pending']
+            );
 
             return res.status(200).json({ success: true });
         }
@@ -61,3 +79,4 @@ export default async function handler(req: any, res: any) {
         return res.status(500).json({ error: err.message });
     }
 }
+

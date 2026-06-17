@@ -4,7 +4,7 @@ import { useProject, useUpdateProject, triggerFullProjectSync } from '@/hooks/us
 import { useQueryClient } from '@tanstack/react-query'
 
 export function DatabaseSettingsDialog() {
-    const { currentProjectId, setShowDatabaseSettings } = useAppStore()
+    const { currentProjectId, setShowDatabaseSettings, activeBranch } = useAppStore()
     const { data: project } = useProject(currentProjectId)
     const updateProject = useUpdateProject()
     const qc = useQueryClient()
@@ -85,7 +85,7 @@ export function DatabaseSettingsDialog() {
             if (project) {
                 // Always ensure latest URL is saved before sync
                 await updateProject.mutateAsync({ id: currentProjectId!, databaseUrl: dbUrl })
-                await triggerFullProjectSync(qc, { ...project, databaseUrl: dbUrl })
+                await triggerFullProjectSync(qc, { ...project, databaseUrl: dbUrl }, activeBranch || 'main')
                 setTestResult({ success: true })
                 setShowDatabaseSettings(false)
             }
@@ -141,8 +141,7 @@ export function DatabaseSettingsDialog() {
                     <button
                         onClick={() => setInputMode('url')}
                         style={{
-                            flex: 1, padding: '6px 0', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', borderRadius: '8px', transition: 'all 150ms ease', border: '1px solid transparent', cursor: 'pointer',
-                            ...(inputMode === 'url' ? { background: 'rgba(255,255,255,0.1)', color: '#FFFFFF', borderColor: 'rgba(255,255,255,0.05)', boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)' } : { background: 'transparent', color: '#737373' })
+                            ...(inputMode === 'url' ? { background: 'rgba(255,255,255,0.1)', color: '#FFFFFF', border: '1px solid rgba(255,255,255,0.05)', boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)' } : { background: 'transparent', color: '#737373', border: '1px solid transparent' })
                         }}
                     >
                         Direct URL
@@ -150,8 +149,7 @@ export function DatabaseSettingsDialog() {
                     <button
                         onClick={() => setInputMode('form')}
                         style={{
-                            flex: 1, padding: '6px 0', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', borderRadius: '8px', transition: 'all 150ms ease', border: '1px solid transparent', cursor: 'pointer',
-                            ...(inputMode === 'form' ? { background: 'rgba(255,255,255,0.1)', color: '#FFFFFF', borderColor: 'rgba(255,255,255,0.05)', boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)' } : { background: 'transparent', color: '#737373' })
+                            ...(inputMode === 'form' ? { background: 'rgba(255,255,255,0.1)', color: '#FFFFFF', border: '1px solid rgba(255,255,255,0.05)', boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)' } : { background: 'transparent', color: '#737373', border: '1px solid transparent' })
                         }}
                     >
                         Connection Form

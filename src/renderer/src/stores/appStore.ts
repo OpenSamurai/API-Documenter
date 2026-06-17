@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { EditorTab, ProxyConnection, Environment } from '@/types'
+import type { EditorTab, ProxyConnection, Environment, ConflictDetail } from '@/types'
 
 interface AppState {
     // Selection state
@@ -15,6 +15,9 @@ interface AppState {
     isSidebarCollapsed: boolean
     activeSidebarTab: 'explorer' | 'git'
     isSyncing: boolean
+    activeBranch: string | null
+    currentSyncBranch: string | null
+    databaseUrl: string | null
 
     // Dialog state
     showCreateProject: boolean
@@ -34,11 +37,15 @@ interface AppState {
     isTeamWorkspace: boolean
     teamConfig: { url: string; token: string; projectId: string } | null
 
-    // Proxy state
-    proxyConnection: ProxyConnection | null
-
     // Environment store
     environments: Environment[]
+
+    // Git state
+    gitStatus: any | null
+    gitBranches: any | null
+    gitLogs: any[]
+    lastCommitHash: string | null
+    syncConflicts: ConflictDetail[]
 
     // Actions
     scrollApi: (apiId: string | null, folderId?: string) => void
@@ -53,6 +60,9 @@ interface AppState {
     setActiveEditorTab: (tab: EditorTab) => void
     toggleSidebar: () => void
     setActiveSidebarTab: (tab: 'explorer' | 'git') => void
+    setActiveBranch: (branch: string | null) => void
+    setCurrentSyncBranch: (branch: string | null) => void
+    setDatabaseUrl: (url: string | null) => void
     setShowCreateProject: (show: boolean) => void
     setShowCreateFolder: (show: boolean) => void
     setShowCreateApi: (show: boolean) => void
@@ -67,6 +77,9 @@ interface AppState {
     setProxyConnection: (conn: ProxyConnection | null) => void
     setIsSyncing: (isSyncing: boolean) => void
     setTeamWorkspace: (isTeam: boolean, config?: { url: string; token: string; projectId: string } | null) => void
+    setGitState: (status: any, branches: any, logs: any[]) => void
+    setLastCommitHash: (hash: string) => void
+    setSyncConflicts: (conflicts: ConflictDetail[]) => void
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -79,6 +92,9 @@ export const useAppStore = create<AppState>((set) => ({
     activeEditorTab: 'params',
     isSidebarCollapsed: false,
     activeSidebarTab: 'explorer',
+    activeBranch: null,
+    currentSyncBranch: null,
+    databaseUrl: null,
 
     showCreateProject: false,
     showCreateFolder: false,
@@ -100,6 +116,12 @@ export const useAppStore = create<AppState>((set) => ({
     environments: [],
     currentEnvironmentId: null,
 
+    gitStatus: null,
+    gitBranches: null,
+    gitLogs: [],
+    lastCommitHash: null,
+    syncConflicts: [],
+
     selectProject: (id) => set({ currentProjectId: id, currentFolderId: null, currentApiId: null, showApiDocumentation: false }),
     selectFolder: (id) => set({ currentFolderId: id }),
     selectApi: (apiId: string | null, folderId?: string) => set((s) => ({
@@ -119,6 +141,9 @@ export const useAppStore = create<AppState>((set) => ({
     setActiveEditorTab: (tab) => set({ activeEditorTab: tab }),
     toggleSidebar: () => set((s) => ({ isSidebarCollapsed: !s.isSidebarCollapsed })),
     setActiveSidebarTab: (tab) => set({ activeSidebarTab: tab }),
+    setActiveBranch: (branch) => set({ activeBranch: branch }),
+    setCurrentSyncBranch: (branch) => set({ currentSyncBranch: branch }),
+    setDatabaseUrl: (url) => set({ databaseUrl: url }),
     setShowCreateProject: (show) => set({ showCreateProject: show }),
     setShowCreateFolder: (show) => set({ showCreateFolder: show }),
     setShowCreateApi: (show) => set({ showCreateApi: show }),
@@ -140,4 +165,7 @@ export const useAppStore = create<AppState>((set) => ({
         currentApiId: null,
         showApiDocumentation: false
     }),
+    setGitState: (status, branches, logs) => set({ gitStatus: status, gitBranches: branches, gitLogs: logs }),
+    setLastCommitHash: (hash) => set({ lastCommitHash: hash }),
+    setSyncConflicts: (conflicts) => set({ syncConflicts: conflicts }),
 }))

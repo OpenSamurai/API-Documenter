@@ -21,17 +21,32 @@ import { EnvironmentsDialog } from './components/EnvironmentsDialog'
 import { UpdaterNotifier } from './components/UpdaterNotifier'
 import { StatusBar } from './components/StatusBar'
 import { CookieManagerDialog } from './components/CookieManagerDialog'
-import { ApiDocumentationPage } from '@/components/ApiDocumentationPage'
+import { GlobalGitManager } from './components/GlobalGitManager'
+import { ApiDocumentationPage } from './components/ApiDocumentationPage'
+import { ConflictResolutionDialog } from './components/ConflictResolutionDialog'
 
 export function App() {
-    const {
-        currentApiId, currentProjectId,
-        isOnline, setIsOnline,
-        showCreateProject, showCreateFolder, showCreateApi, showTeamConnect,
-        showDatabaseSettings, showRbacSettings, showDeploySettings, showGeneralSettings,
-        showApiDocumentation, showCookieManager, setShowCookieManager,
-        activeSidebarTab
-    } = useAppStore()
+    const currentApiId = useAppStore(s => s.currentApiId)
+    const currentProjectId = useAppStore(s => s.currentProjectId)
+    const isOnline = useAppStore(s => s.isOnline)
+    const setIsOnline = useAppStore(s => s.setIsOnline)
+    const showCreateProject = useAppStore(s => s.showCreateProject)
+    const showCreateFolder = useAppStore(s => s.showCreateFolder)
+    const showCreateApi = useAppStore(s => s.showCreateApi)
+    const showTeamConnect = useAppStore(s => s.showTeamConnect)
+    const showDatabaseSettings = useAppStore(s => s.showDatabaseSettings)
+    const showRbacSettings = useAppStore(s => s.showRbacSettings)
+    const showDeploySettings = useAppStore(s => s.showDeploySettings)
+    const showGeneralSettings = useAppStore(s => s.showGeneralSettings)
+    const showApiDocumentation = useAppStore(s => s.showApiDocumentation)
+    const showCookieManager = useAppStore(s => s.showCookieManager)
+    const setShowCookieManager = useAppStore(s => s.setShowCookieManager)
+    const activeSidebarTab = useAppStore(s => s.activeSidebarTab)
+    const proxyConnection = useAppStore(s => s.proxyConnection)
+    const isSyncing = useAppStore(s => s.isSyncing)
+    const setIsSyncing = useAppStore(s => s.setIsSyncing)
+    const syncConflicts = useAppStore(s => s.syncConflicts)
+    const setSyncConflicts = useAppStore(s => s.setSyncConflicts)
     const { data: projects } = useProjects()
 
     useEffect(() => {
@@ -48,35 +63,14 @@ export function App() {
     useProjectFilesWatcher(currentProjectId)
 
     const { syncNow } = useSync()
-    const { proxyConnection, isSyncing, setIsSyncing } = useAppStore()
-
-    // ─── Blocking Initial Sync ───
-    useEffect(() => {
-        if (!currentProjectId || !isOnline) return
-        const p = projects?.find(x => x.id === currentProjectId)
-        const hasDirect = !!p?.databaseUrl
-        const hasProxy = !!proxyConnection?.connected
-
-        if (!hasDirect && !hasProxy) return
-
-        const doInitialSync = async () => {
-            console.log('[App] Starting initial blocking sync...')
-            try {
-                await syncNow()
-            } catch (err) {
-                console.error('[App] Initial sync failed:', err)
-            } finally {
-                console.log('[App] Initial blocking sync complete.')
-            }
-        }
-
-        doInitialSync()
-    }, [currentProjectId, isOnline, proxyConnection?.connected, !!projects])
 
     const hasProject = (projects?.length ?? 0) > 0
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw', background: 'var(--bg-app)' }}>
+            {/* Git Manager */}
+            <GlobalGitManager />
+
             {/* Titlebar */}
             <Titlebar isOnline={isOnline} />
 
@@ -131,6 +125,21 @@ export function App() {
             {showDeploySettings && <DeployProxyDialog />}
             {showGeneralSettings && <GeneralSettingsDialog />}
             <EnvironmentsDialog />
+
+            {/* Conflict Resolution */}
+            {syncConflicts.length > 0 && currentProjectId && (
+                <ConflictResolutionDialog 
+                    conflicts={syncConflicts} 
+                    projectId={currentProjectId}
+                    onResolved={async () => {
+                        setSyncConflicts([])
+                        // Push resolved items (now status='pending'), then pull fresh data
+                        await syncNow(false)
+                        await syncNow(true)
+                    }}
+                    onClose={() => setSyncConflicts([])}
+                />
+            )}
 
             {/* Auto-Updater Visual Layer */}
             <UpdaterNotifier />

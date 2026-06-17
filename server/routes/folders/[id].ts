@@ -1,6 +1,8 @@
 import { authenticate } from '../../src/middleware/auth.js';
+import crypto from 'crypto';
 import { checkFolderAccess } from '../../src/middleware/rbac.js';
 import { rateLimit } from '../../src/middleware/rateLimit.js';
+import { getProjectActiveBranch } from '../../src/db/proxyDb.js';
 
 export default async function handler(req: any, res: any) {
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -28,9 +30,11 @@ export default async function handler(req: any, res: any) {
     }
 
     try {
+        const activeBranch = await getProjectActiveBranch(db, user.projectId);
+
         if (req.method === 'GET') {
             await checkFolderAccess(context, id, 'read');
-            const folders = await db.query('SELECT * FROM folders WHERE id = ? AND project_id = ?', [id, user.projectId]) as any[];
+            const folders = await db.query('SELECT * FROM folders WHERE id = ? AND branch = ? AND project_id = ?', [id, activeBranch, user.projectId]) as any[];
             if (folders.length === 0) return res.status(404).json({ error: 'Folder not found' });
 
             const f = folders[0];
@@ -56,8 +60,13 @@ export default async function handler(req: any, res: any) {
             const { name, description, order_index } = req.body;
 
             await db.execute(
-                'UPDATE folders SET name = ?, description = ?, order_index = ?, sync_status = ? WHERE id = ? AND project_id = ?',
-                [name, description, order_index, 'synced', id, user.projectId]
+                'UPDATE folders SET name = ?, description = ?, order_index = ?, sync_status = ?, version = version + 1 WHERE id = ? AND branch = ? AND project_id = ?',
+                [name, description, order_index, 'synced', id, activeBranch, user.projectId]
+            );
+
+            await db.execute(
+                `INSERT INTO sync_queue (id, project_id, local_id, branch, table_name, operation, data, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                [crypto.randomUUID(), user.projectId, id, activeBranch, 'folders', 'update', JSON.stringify(req.body), 'pending']
             );
 
             return res.status(200).json({ success: true });
@@ -66,8 +75,21 @@ export default async function handler(req: any, res: any) {
         if (req.method === 'DELETE') {
             if (user.role !== 'admin') return res.status(403).json({ error: 'Admin access required to delete folders' });
 
-            await db.execute('DELETE FROM api_collections WHERE folder_id = ?', [id]);
-            await db.execute('DELETE FROM folders WHERE id = ? AND project_id = ?', [id, user.projectId]);
+            // Soft delete child APIs
+            await db.execute(
+                'UPDATE api_collections SET is_deleted = 1, deleted_at = NOW(), version = version + 1, sync_status = ? WHERE folder_id = ? AND branch = ?',
+                ['synced', id, activeBranch]
+            );
+            // Soft delete folder
+            await db.execute(
+                'UPDATE folders SET is_deleted = 1, deleted_at = NOW(), version = version + 1, sync_status = ? WHERE id = ? AND branch = ? AND project_id = ?',
+                ['synced', id, activeBranch, user.projectId]
+            );
+
+            await db.execute(
+                `INSERT INTO sync_queue (id, project_id, local_id, branch, table_name, operation, data, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                [crypto.randomUUID(), user.projectId, id, activeBranch, 'folders', 'delete', JSON.stringify({ id }), 'pending']
+            );
 
             return res.status(200).json({ success: true });
         }
@@ -77,3 +99,4 @@ export default async function handler(req: any, res: any) {
         return res.status(500).json({ error: err.message });
     }
 }
+
