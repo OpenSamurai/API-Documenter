@@ -94,9 +94,9 @@ export class SyncController extends BaseController {
                             )
                         } else if (tableName === 'folders') {
                             if (operation === 'create' || operation === 'update') {
-                                const [existing]: any = await conn.execute('SELECT version FROM folders WHERE id = ? AND branch = ?', [payload.id, branchName])
+                                const [existing]: any = await conn.execute('SELECT version, is_deleted FROM folders WHERE id = ? AND branch = ?', [payload.id, branchName])
                                 if (existing.length > 0 && baseVersion > 0 && (existing[0].version || 1) > baseVersion) {
-                                    results.push({ id: entry.id, status: 'conflict', dbVersion: existing[0].version, localVersion: payload.version, baseVersion })
+                                    results.push({ id: entry.id, status: 'conflict', dbVersion: existing[0].version, localVersion: payload.version, baseVersion, isDeleted: existing[0].is_deleted ? true : false })
                                     continue
                                 }
                                 await conn.execute(
@@ -104,9 +104,9 @@ export class SyncController extends BaseController {
                                     [payload.id, payload.projectId, branchName, payload.name, payload.description || '', payload.orderIndex || 0, payload.version || 1, payload.isDeleted ? 1 : 0, payload.deletedAt ? new Date(payload.deletedAt) : null, 'synced', payload.updatedAt ? new Date(payload.updatedAt) : null, payload.name, payload.description || '', payload.orderIndex || 0, payload.version || 1, payload.isDeleted ? 1 : 0, payload.deletedAt ? new Date(payload.deletedAt) : null, 'synced', payload.updatedAt ? new Date(payload.updatedAt) : null]
                                 )
                             } else if (operation === 'delete') {
-                                const [existing]: any = await conn.execute('SELECT version FROM folders WHERE id = ? AND branch = ?', [payload.id, branchName])
+                                const [existing]: any = await conn.execute('SELECT version, is_deleted FROM folders WHERE id = ? AND branch = ?', [payload.id, branchName])
                                 if (existing.length > 0 && baseVersion > 0 && (existing[0].version || 1) > baseVersion) {
-                                    results.push({ id: entry.id, status: 'conflict', dbVersion: existing[0].version, localVersion: payload.version, baseVersion })
+                                    results.push({ id: entry.id, status: 'conflict', dbVersion: existing[0].version, localVersion: payload.version, baseVersion, isDeleted: existing[0].is_deleted ? true : false })
                                     continue
                                 }
                                 // Soft delete: mark child APIs and folder as deleted
@@ -115,9 +115,9 @@ export class SyncController extends BaseController {
                             }
                         } else if (tableName === 'apiCollections') {
                             if (operation === 'create' || operation === 'update') {
-                                const [existing]: any = await conn.execute('SELECT version FROM api_collections WHERE id = ? AND branch = ?', [payload.id, branchName])
+                                const [existing]: any = await conn.execute('SELECT version, is_deleted FROM api_collections WHERE id = ? AND branch = ?', [payload.id, branchName])
                                 if (existing.length > 0 && baseVersion > 0 && (existing[0].version || 1) > baseVersion) {
-                                    results.push({ id: entry.id, status: 'conflict', dbVersion: existing[0].version, localVersion: payload.version, baseVersion })
+                                    results.push({ id: entry.id, status: 'conflict', dbVersion: existing[0].version, localVersion: payload.version, baseVersion, isDeleted: existing[0].is_deleted ? true : false })
                                     continue
                                 }
                                 await conn.execute(
@@ -146,9 +146,9 @@ export class SyncController extends BaseController {
                                     ]
                                 )
                             } else if (operation === 'delete') {
-                                const [existing]: any = await conn.execute('SELECT version FROM api_collections WHERE id = ? AND branch = ?', [payload.id, branchName])
+                                const [existing]: any = await conn.execute('SELECT version, is_deleted FROM api_collections WHERE id = ? AND branch = ?', [payload.id, branchName])
                                 if (existing.length > 0 && baseVersion > 0 && (existing[0].version || 1) > baseVersion) {
-                                    results.push({ id: entry.id, status: 'conflict', dbVersion: existing[0].version, localVersion: payload.version, baseVersion })
+                                    results.push({ id: entry.id, status: 'conflict', dbVersion: existing[0].version, localVersion: payload.version, baseVersion, isDeleted: existing[0].is_deleted ? true : false })
                                     continue
                                 }
                                 // Soft delete
@@ -156,9 +156,9 @@ export class SyncController extends BaseController {
                             }
                         } else if (tableName === 'environments') {
                             if (operation === 'create' || operation === 'update') {
-                                const [existing]: any = await conn.execute('SELECT version FROM environments WHERE id = ? AND branch = ?', [payload.id, branchName])
+                                const [existing]: any = await conn.execute('SELECT version, is_deleted FROM environments WHERE id = ? AND branch = ?', [payload.id, branchName])
                                 if (existing.length > 0 && baseVersion > 0 && (existing[0].version || 1) > baseVersion) {
-                                    results.push({ id: entry.id, status: 'conflict', dbVersion: existing[0].version, localVersion: payload.version, baseVersion })
+                                    results.push({ id: entry.id, status: 'conflict', dbVersion: existing[0].version, localVersion: payload.version, baseVersion, isDeleted: existing[0].is_deleted ? true : false })
                                     continue
                                 }
                                 await conn.execute(
@@ -169,9 +169,9 @@ export class SyncController extends BaseController {
                                     ]
                                 )
                             } else if (operation === 'delete') {
-                                const [existing]: any = await conn.execute('SELECT version FROM environments WHERE id = ? AND branch = ?', [payload.id, branchName])
+                                const [existing]: any = await conn.execute('SELECT version, is_deleted FROM environments WHERE id = ? AND branch = ?', [payload.id, branchName])
                                 if (existing.length > 0 && baseVersion > 0 && (existing[0].version || 1) > baseVersion) {
-                                    results.push({ id: entry.id, status: 'conflict', dbVersion: existing[0].version, localVersion: payload.version, baseVersion })
+                                    results.push({ id: entry.id, status: 'conflict', dbVersion: existing[0].version, localVersion: payload.version, baseVersion, isDeleted: existing[0].is_deleted ? true : false })
                                     continue
                                 }
                                 // Soft delete
@@ -235,9 +235,9 @@ export class SyncController extends BaseController {
                             )
                         } else if (tableName === 'folders') {
                             if (operation === 'create' || operation === 'update') {
-                                const { rows: existing } = await client.query('SELECT version FROM folders WHERE id = $1 AND branch = $2', [payload.id, branchName])
+                                const { rows: existing } = await client.query('SELECT version, is_deleted FROM folders WHERE id = $1 AND branch = $2', [payload.id, branchName])
                                 if (existing.length > 0 && baseVersion > 0 && (existing[0].version || 1) > baseVersion) {
-                                    results.push({ id: entry.id, status: 'conflict', dbVersion: existing[0].version, localVersion: payload.version, baseVersion })
+                                    results.push({ id: entry.id, status: 'conflict', dbVersion: existing[0].version, localVersion: payload.version, baseVersion, isDeleted: existing[0].is_deleted ? true : false })
                                     continue
                                 }
                                 await client.query(
@@ -245,9 +245,11 @@ export class SyncController extends BaseController {
                                     [payload.id, payload.projectId, branchName, payload.name, payload.description || '', payload.orderIndex || 0, payload.version || 1, payload.isDeleted || false, payload.deletedAt ? new Date(payload.deletedAt) : null, 'synced', payload.updatedAt ? new Date(payload.updatedAt) : null]
                                 )
                             } else if (operation === 'delete') {
-                                const { rows: existing } = await client.query('SELECT version FROM folders WHERE id = $1 AND branch = $2', [payload.id, branchName])
-                                if (existing.length > 0 && baseVersion > 0 && (existing[0].version || 1) > baseVersion) {
-                                    results.push({ id: entry.id, status: 'conflict', dbVersion: existing[0].version, localVersion: payload.version, baseVersion })
+                                const { rows: existing } = await client.query('SELECT version, is_deleted FROM folders WHERE id = $1 AND branch = $2', [payload.id, branchName])
+                                if (existing.length > 0 && existing[0].is_deleted) {
+                                    // Already deleted remotely, no conflict
+                                } else if (existing.length > 0 && baseVersion > 0 && (existing[0].version || 1) > baseVersion) {
+                                    results.push({ id: entry.id, status: 'conflict', dbVersion: existing[0].version, localVersion: payload.version, baseVersion, isDeleted: existing[0].is_deleted ? true : false })
                                     continue
                                 }
                                 // Soft delete
@@ -256,9 +258,9 @@ export class SyncController extends BaseController {
                             }
                         } else if (tableName === 'apiCollections') {
                             if (operation === 'create' || operation === 'update') {
-                                const { rows: existing } = await client.query('SELECT version FROM api_collections WHERE id = $1 AND branch = $2', [payload.id, branchName])
+                                const { rows: existing } = await client.query('SELECT version, is_deleted FROM api_collections WHERE id = $1 AND branch = $2', [payload.id, branchName])
                                 if (existing.length > 0 && baseVersion > 0 && (existing[0].version || 1) > baseVersion) {
-                                    results.push({ id: entry.id, status: 'conflict', dbVersion: existing[0].version, localVersion: payload.version, baseVersion })
+                                    results.push({ id: entry.id, status: 'conflict', dbVersion: existing[0].version, localVersion: payload.version, baseVersion, isDeleted: existing[0].is_deleted ? true : false })
                                     continue
                                 }
                                 await client.query(
@@ -281,9 +283,11 @@ export class SyncController extends BaseController {
                                     ]
                                 )
                             } else if (operation === 'delete') {
-                                const { rows: existing } = await client.query('SELECT version FROM api_collections WHERE id = $1 AND branch = $2', [payload.id, branchName])
-                                if (existing.length > 0 && baseVersion > 0 && (existing[0].version || 1) > baseVersion) {
-                                    results.push({ id: entry.id, status: 'conflict', dbVersion: existing[0].version, localVersion: payload.version, baseVersion })
+                                const { rows: existing } = await client.query('SELECT version, is_deleted FROM api_collections WHERE id = $1 AND branch = $2', [payload.id, branchName])
+                                if (existing.length > 0 && existing[0].is_deleted) {
+                                    // Already deleted remotely, no conflict
+                                } else if (existing.length > 0 && baseVersion > 0 && (existing[0].version || 1) > baseVersion) {
+                                    results.push({ id: entry.id, status: 'conflict', dbVersion: existing[0].version, localVersion: payload.version, baseVersion, isDeleted: existing[0].is_deleted ? true : false })
                                     continue
                                 }
                                 // Soft delete
@@ -291,9 +295,9 @@ export class SyncController extends BaseController {
                             }
                         } else if (tableName === 'environments') {
                             if (operation === 'create' || operation === 'update') {
-                                const { rows: existing } = await client.query('SELECT version FROM environments WHERE id = $1 AND branch = $2', [payload.id, branchName])
+                                const { rows: existing } = await client.query('SELECT version, is_deleted FROM environments WHERE id = $1 AND branch = $2', [payload.id, branchName])
                                 if (existing.length > 0 && baseVersion > 0 && (existing[0].version || 1) > baseVersion) {
-                                    results.push({ id: entry.id, status: 'conflict', dbVersion: existing[0].version, localVersion: payload.version, baseVersion })
+                                    results.push({ id: entry.id, status: 'conflict', dbVersion: existing[0].version, localVersion: payload.version, baseVersion, isDeleted: existing[0].is_deleted ? true : false })
                                     continue
                                 }
                                 await client.query(
@@ -303,9 +307,11 @@ export class SyncController extends BaseController {
                                     ]
                                 )
                             } else if (operation === 'delete') {
-                                const { rows: existing } = await client.query('SELECT version FROM environments WHERE id = $1 AND branch = $2', [payload.id, branchName])
-                                if (existing.length > 0 && baseVersion > 0 && (existing[0].version || 1) > baseVersion) {
-                                    results.push({ id: entry.id, status: 'conflict', dbVersion: existing[0].version, localVersion: payload.version, baseVersion })
+                                const { rows: existing } = await client.query('SELECT version, is_deleted FROM environments WHERE id = $1 AND branch = $2', [payload.id, branchName])
+                                if (existing.length > 0 && existing[0].is_deleted) {
+                                    // Already deleted remotely, no conflict
+                                } else if (existing.length > 0 && baseVersion > 0 && (existing[0].version || 1) > baseVersion) {
+                                    results.push({ id: entry.id, status: 'conflict', dbVersion: existing[0].version, localVersion: payload.version, baseVersion, isDeleted: existing[0].is_deleted ? true : false })
                                     continue
                                 }
                                 // Soft delete
@@ -452,7 +458,7 @@ export class SyncController extends BaseController {
 
     async updateSyncQueueStatus(_event: any, url: string, projectId: string, ids: string[]) {
         if (!ids || ids.length === 0) return { success: true };
-        const isMysql = url.startsWith('mysql://')
+        const isMysql = url.startsWith('mysql')
         try {
             if (isMysql) {
                 const conn = await mysql.createConnection(parseMysqlUrl(url, { connectTimeout: 10000, timezone: 'Z' }))

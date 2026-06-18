@@ -292,8 +292,16 @@ export function ApiDocumentationPage() {
     }, [pages])
 
     const isCompilingRef = useRef(false)
+    const needsRecompileRef = useRef(false)
+
     const handleRecompile = useCallback(async () => {
-        if (!compileMd.trim() || isCompilingRef.current) return
+        if (!compileMd.trim()) return
+
+        if (isCompilingRef.current) {
+            // Queue a recompile for after the current one finishes
+            needsRecompileRef.current = true
+            return
+        }
         
         isCompilingRef.current = true
         setIsCompiling(true)
@@ -314,6 +322,12 @@ export function ApiDocumentationPage() {
         } finally {
             isCompilingRef.current = false
             setIsCompiling(false)
+            
+            // If a change happened while compiling, compile again
+            if (needsRecompileRef.current) {
+                needsRecompileRef.current = false
+                setTimeout(handleRecompile, 100)
+            }
         }
     }, [compileMd])
 
@@ -380,7 +394,7 @@ export function ApiDocumentationPage() {
             position: maxPos + 1,
             type: 'custom',
             visible: true,
-            markdown: `# ${title}\n\nStart writing your custom content here...`
+            markdown: `# ${title}\n\nStart writing your custom content here...\n\n<div style="page-break-after: always;"></div>`
         }
 
         setPages(prev => [...prev, newPage])
@@ -401,15 +415,23 @@ export function ApiDocumentationPage() {
             const targetIndex = direction === 'up' ? index - 1 : index + 1
             if (targetIndex < 1 || targetIndex >= sorted.length) return prev
 
-            // Swap positions
+            // Get the items and their target positions
             const currentItem = sorted[index]
             const targetItem = sorted[targetIndex]
             
             const currentPos = currentItem.position
-            currentItem.position = targetItem.position
-            targetItem.position = currentPos
+            const targetPos = targetItem.position
 
-            return [...prev] // Trigger re-render (position mutation is fine within local copy or we can map)
+            // Immutably swap the positions
+            return prev.map(p => {
+                if (p.id === currentItem.id) {
+                    return { ...p, position: targetPos }
+                }
+                if (p.id === targetItem.id) {
+                    return { ...p, position: currentPos }
+                }
+                return p
+            })
         })
     }, [])
 

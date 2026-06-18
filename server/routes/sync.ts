@@ -68,9 +68,11 @@ export default async function handler(req: any, res: any) {
                     console.log(`[Sync] Processing folder: ${payload.name} (${operation})`);
                     
                     // Conflict detection
-                    const existing = await db.query<any>('SELECT version FROM folders WHERE id = ? AND branch = ?', [payload.id, branchName]);
-                    if (existing.length > 0 && baseVersion > 0 && (existing[0].version || 1) > baseVersion) {
-                        results.push({ id: entry.id, status: 'conflict', dbVersion: existing[0].version, localVersion: payload.version, baseVersion });
+                    const existing = await db.query<any>('SELECT version, is_deleted FROM folders WHERE id = ? AND branch = ?', [payload.id, branchName]);
+                    if (existing.length > 0 && existing[0].is_deleted && operation === 'delete') {
+                        // Already deleted remotely, no conflict
+                    } else if (existing.length > 0 && baseVersion > 0 && (existing[0].version || 1) > baseVersion) {
+                        results.push({ id: entry.id, status: 'conflict', dbVersion: existing[0].version, localVersion: payload.version, baseVersion, isDeleted: existing[0].is_deleted ? true : false });
                         continue;
                     }
 
@@ -96,9 +98,11 @@ export default async function handler(req: any, res: any) {
                     console.log(`[Sync] Processing API: ${payload.name} in folder ${folderId} (${operation})`);
                     
                     // Conflict detection
-                    const existing = await db.query<any>('SELECT version FROM api_collections WHERE id = ? AND branch = ?', [payload.id, branchName]);
-                    if (existing.length > 0 && baseVersion > 0 && (existing[0].version || 1) > baseVersion) {
-                        results.push({ id: entry.id, status: 'conflict', dbVersion: existing[0].version, localVersion: payload.version, baseVersion });
+                    const existing = await db.query<any>('SELECT version, is_deleted FROM api_collections WHERE id = ? AND branch = ?', [payload.id, branchName]);
+                    if (existing.length > 0 && existing[0].is_deleted && operation === 'delete') {
+                        // Already deleted remotely, no conflict
+                    } else if (existing.length > 0 && baseVersion > 0 && (existing[0].version || 1) > baseVersion) {
+                        results.push({ id: entry.id, status: 'conflict', dbVersion: existing[0].version, localVersion: payload.version, baseVersion, isDeleted: existing[0].is_deleted ? true : false });
                         continue;
                     }
 
@@ -145,9 +149,11 @@ export default async function handler(req: any, res: any) {
                     console.log(`[Sync] Processing environment: ${payload.name} (${operation})`);
                     
                     // Conflict detection
-                    const existing = await db.query<any>('SELECT version FROM environments WHERE id = ? AND branch = ?', [payload.id, branchName]);
-                    if (existing.length > 0 && baseVersion > 0 && (existing[0].version || 1) > baseVersion) {
-                        results.push({ id: entry.id, status: 'conflict', dbVersion: existing[0].version, localVersion: payload.version, baseVersion });
+                    const existing = await db.query<any>('SELECT version, is_deleted FROM environments WHERE id = ? AND branch = ?', [payload.id, branchName]);
+                    if (existing.length > 0 && existing[0].is_deleted && operation === 'delete') {
+                        // Already deleted remotely, no conflict
+                    } else if (existing.length > 0 && baseVersion > 0 && (existing[0].version || 1) > baseVersion) {
+                        results.push({ id: entry.id, status: 'conflict', dbVersion: existing[0].version, localVersion: payload.version, baseVersion, isDeleted: existing[0].is_deleted ? true : false });
                         continue;
                     }
 

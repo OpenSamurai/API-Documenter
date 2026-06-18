@@ -162,7 +162,7 @@ export async function verifyUserRole(adapter: DbAdapter, user: string | null, to
 
 export async function getAllFolders(adapter: DbAdapter, projectId: string) {
     const rows = await adapter.query<any>(
-        'SELECT id, name, description FROM folders WHERE project_id = ? ORDER BY order_index',
+        'SELECT id, name, description FROM folders WHERE project_id = ? AND (is_deleted IS NULL OR is_deleted = FALSE OR is_deleted = 0) ORDER BY order_index',
         [projectId]
     );
     return rows;
@@ -181,7 +181,10 @@ export async function getApisByFolders(adapter: DbAdapter, projectId: string, al
         SELECT ac.*, f.name as folder_name, f.description as folder_description 
         FROM api_collections ac
         JOIN folders f ON ac.folder_id = f.id
-        WHERE ac.project_id = ? AND f.name IN (${placeholders})
+        WHERE ac.project_id = ? 
+          AND f.name IN (${placeholders})
+          AND (ac.is_deleted IS NULL OR ac.is_deleted = FALSE OR ac.is_deleted = 0)
+          AND (f.is_deleted IS NULL OR f.is_deleted = FALSE OR f.is_deleted = 0)
         ORDER BY f.order_index, ac.created_at
     `, [projectId, ...allowedFolders]);
 
@@ -189,12 +192,12 @@ export async function getApisByFolders(adapter: DbAdapter, projectId: string, al
 }
 
 export async function getFolderById(adapter: DbAdapter, folderId: string, projectId: string) {
-    const rows = await adapter.query<any>('SELECT * FROM folders WHERE id = ? AND project_id = ?', [folderId, projectId]);
+    const rows = await adapter.query<any>('SELECT * FROM folders WHERE id = ? AND project_id = ? AND (is_deleted IS NULL OR is_deleted = FALSE OR is_deleted = 0)', [folderId, projectId]);
     return rows[0];
 }
 
 export async function getApisByFolder(adapter: DbAdapter, folderId: string, projectId: string) {
-    const rows = await adapter.query<any>('SELECT * FROM api_collections WHERE folder_id = ? AND project_id = ?', [folderId, projectId]);
+    const rows = await adapter.query<any>('SELECT * FROM api_collections WHERE folder_id = ? AND project_id = ? AND (is_deleted IS NULL OR is_deleted = FALSE OR is_deleted = 0)', [folderId, projectId]);
     return rows;
 }
 

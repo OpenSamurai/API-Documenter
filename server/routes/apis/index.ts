@@ -32,7 +32,7 @@ export default async function handler(req: any, res: any) {
             let apis: any[] = [];
             if (folderId) {
                 await checkFolderAccess(context, folderId, 'read');
-                apis = await db.query('SELECT * FROM api_collections WHERE folder_id = ? AND branch = ?', [folderId, activeBranch]);
+                apis = await db.query('SELECT * FROM api_collections WHERE folder_id = ? AND branch = ? AND (is_deleted = 0 OR is_deleted = false OR is_deleted IS NULL)', [folderId, activeBranch]);
             } else {
                 // Return all APIs user has access to
                 const isWildcard = Array.isArray(user.allowedFolders)
@@ -40,10 +40,10 @@ export default async function handler(req: any, res: any) {
                     : !!(user.allowedFolders as Record<string, any>)['*'];
 
                 if (user.role === 'admin' || isWildcard) {
-                    apis = await db.query('SELECT * FROM api_collections WHERE project_id = ? AND branch = ?', [user.projectId, activeBranch]);
+                    apis = await db.query('SELECT * FROM api_collections WHERE project_id = ? AND branch = ? AND (is_deleted = 0 OR is_deleted = false OR is_deleted IS NULL)', [user.projectId, activeBranch]);
                 } else {
                     // Resolve actual folder IDs by checking both ID and name in permissions
-                    const allFolders = await db.query('SELECT id, name FROM folders WHERE project_id = ? AND branch = ?', [user.projectId, activeBranch]);
+                    const allFolders = await db.query('SELECT id, name FROM folders WHERE project_id = ? AND branch = ? AND (is_deleted = 0 OR is_deleted = false OR is_deleted IS NULL)', [user.projectId, activeBranch]);
                     const allowedFolderIds = allFolders.filter((f: any) => {
                         return (user.allowedFolders as any[]).some((p: any) => {
                             const idOrName = typeof p === 'string' ? p : p.folderId;
@@ -56,7 +56,7 @@ export default async function handler(req: any, res: any) {
                     } else {
                         const placeholders = allowedFolderIds.map(() => '?').join(',');
                         apis = await db.query(
-                            `SELECT * FROM api_collections WHERE project_id = ? AND branch = ? AND folder_id IN (${placeholders})`,
+                            `SELECT * FROM api_collections WHERE project_id = ? AND branch = ? AND folder_id IN (${placeholders}) AND (is_deleted = 0 OR is_deleted = false OR is_deleted IS NULL)`,
                             [user.projectId, activeBranch, ...allowedFolderIds]
                         );
                     }

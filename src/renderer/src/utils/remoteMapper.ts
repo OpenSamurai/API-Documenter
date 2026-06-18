@@ -19,8 +19,8 @@ export function mapRemoteFolder(f: any): any {
         orderIndex: f.order_index ?? f.orderIndex ?? 0,
         lastSync: toIso(f.last_sync || f.lastSync),
         syncStatus: f.sync_status || f.syncStatus || 'synced',
-        createdAt: toIso(f.created_at || f.createdAt),
-        updatedAt: toIso(f.updated_at || f.updatedAt || f.created_at || f.createdAt),
+        createdAt: toIso(f.created_at || f.createdAt || new Date().toISOString()),
+        updatedAt: toIso(f.updated_at || f.updatedAt || f.created_at || f.createdAt || new Date().toISOString()),
         role: f.role
     };
 }
@@ -84,8 +84,8 @@ export function mapRemoteApi(a: any): any {
         version: a.version || 1,
         lastSync: toIso(a.last_sync || a.lastSync),
         syncStatus: a.sync_status || a.syncStatus || 'synced',
-        createdAt: toIso(a.created_at || a.createdAt),
-        updatedAt: toIso(a.updated_at || a.updatedAt || a.created_at || a.createdAt)
+        createdAt: toIso(a.created_at || a.createdAt || new Date().toISOString()),
+        updatedAt: toIso(a.updated_at || a.updatedAt || a.created_at || a.createdAt || new Date().toISOString())
     };
 }
 export function mapRemoteEnvironment(e: any): any {
@@ -106,7 +106,7 @@ export function mapRemoteEnvironment(e: any): any {
         variables: e.variables || '{}',
         lastSync: toIso(e.last_sync || e.lastSync),
         syncStatus: 'synced',
-        createdAt: toIso(e.created_at || e.createdAt),
-        updatedAt: toIso(e.updated_at || e.updatedAt || e.created_at || e.createdAt)
+        createdAt: toIso(e.created_at || e.createdAt || new Date().toISOString()),
+        updatedAt: toIso(e.updated_at || e.updatedAt || e.created_at || e.createdAt || new Date().toISOString())
     };
 }

@@ -261,17 +261,34 @@ export async function performSync(qc: QueryClient, proxyConnection: ProxyConnect
                     : tableName === 'apiCollections' ? await db.apiCollections.get(localId)
                     : await db.environments.get(localId)
 
-                conflictItems.push({
+                // If localEntity is missing (deleted locally) and result.isDeleted is true (deleted remotely),
+                // then both sides agree it's deleted. Auto-resolve this conflict!
+                if (!localEntity && result.isDeleted) {
+                    console.log(`[Sync] Auto-resolving conflict for ${localId} because it is deleted both locally and remotely.`);
+                    if (queueItem) await db.syncQueue.delete(result.id)
+                    continue
+                }
+
+                const existingConflictIndex = conflictItems.findIndex(c => c.localId === localId && c.tableName === tableName)
+                const conflictType = result.isDeleted ? 'delete-update' : 'update-update'
+                const conflictItem = {
                     localId,
                     tableName: tableName as any,
-                    conflictType: 'update-update',
+                    conflictType,
                     baseVersion: result.baseVersion || 0,
                     localVersion: result.localVersion || 0,
                     remoteVersion: result.dbVersion || 0,
                     localData: localEntity || null,
                     remoteData: null, // Will be fetched by the dialog on demand
                     entityName: getEntityName(tableName, localEntity)
-                })
+                }
+
+                if (existingConflictIndex >= 0) {
+                    // Update existing conflict instead of adding a duplicate
+                    conflictItems[existingConflictIndex] = conflictItem
+                } else {
+                    conflictItems.push(conflictItem)
+                }
             } else if (queueItem) {
                 await db.syncQueue.update(result.id, {
                     status: 'failed',

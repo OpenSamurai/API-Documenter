@@ -374,11 +374,7 @@ export function Sidebar() {
                                         <ActionBtn icon="settings" label="Project Settings" onClick={() => setShowGeneralSettings(true)} />
                                     )}
 
-                                    {!isTeamWorkspace && (
-                                        <ActionBtn icon="settings" label="Project Settings" onClick={() => setShowGeneralSettings(true)} />
-                                    )}
-
-                                    {!isTeamWorkspace && (
+                                    {!isTeamWorkspace && activeBranch === currentSyncBranch && (
                                         <ActionBtn 
                                             icon="deploy" 
                                             label={isSyncing ? 'Pushing...' : 'Push all to branch'} 
