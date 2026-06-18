@@ -18,6 +18,8 @@ Thank you for your interest in contributing to API Documenter! We welcome contri
 2.  Run `npm install`.
 3.  Run `npm run dev` to start the development environment.
 
+> 📚 **Important:** Before diving into the codebase, please read our [Developer Guide](DEVELOPER.md) to understand the project architecture, Git integration, and Sync Queue engine.
+
 ## Style Guidelines
 
 - Use TypeScript for all new code.
