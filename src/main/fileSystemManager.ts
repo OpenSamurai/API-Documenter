@@ -78,6 +78,7 @@ export function initProjectDirectory(
         // .gitignore
         const gitignoreContent = [
             'project.secrets.json',
+            '.sync-meta.json',
             ''
         ].join('\n')
         fs.writeFileSync(path.join(dirPath, '.gitignore'), gitignoreContent, 'utf-8')

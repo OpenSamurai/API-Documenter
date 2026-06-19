@@ -9,6 +9,7 @@ import { Sidebar } from './components/Sidebar'
 import { GitSidebar } from './components/GitSidebar'
 import { RequestEditor } from './components/RequestEditor'
 import { EmptyState } from './components/EmptyState'
+import { TabsBar } from './components/TabsBar'
 import { CreateProjectDialog } from './components/CreateProjectDialog'
 import { CreateFolderDialog } from './components/CreateFolderDialog'
 import { CreateApiDialog } from './components/CreateApiDialog'
@@ -83,7 +84,8 @@ export function App() {
                 {activeSidebarTab === 'explorer' ? <Sidebar /> : <GitSidebar />}
 
                 {/* Editor area */}
-                <main style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', position: 'relative' }}>
+                <main style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', position: 'relative', background: '#0A0A0A' }}>
+                    <TabsBar />
                     {showApiDocumentation ? (
                         <ApiDocumentationPage />
                     ) : currentApiId ? (

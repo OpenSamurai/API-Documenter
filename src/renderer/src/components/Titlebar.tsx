@@ -1,8 +1,21 @@
-import React from 'react'
+import React, { useState } from 'react'
+import { useAppStore } from '@/stores/appStore'
+import { UnsavedChangesModal } from './UnsavedChangesModal'
 
 interface Props { isOnline: boolean }
 
 export function Titlebar({ isOnline }: Props) {
+    const [pendingAppClose, setPendingAppClose] = useState(false)
+
+    const handleCloseClick = () => {
+        const draftsCount = Object.keys(useAppStore.getState().apiDrafts).length
+        if (draftsCount > 0) {
+            setPendingAppClose(true)
+        } else {
+            window.electronAPI?.close()
+        }
+    }
+
     return (
         <header
             className="drag"
@@ -62,11 +75,18 @@ export function Titlebar({ isOnline }: Props) {
                     <WinBtn onClick={() => window.electronAPI?.maximize()}>
                         <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.2"><rect x="1" y="1" width="8" height="8" rx="1.5" /></svg>
                     </WinBtn>
-                    <WinBtn onClick={() => window.electronAPI?.close()} danger>
+                    <WinBtn onClick={handleCloseClick} danger>
                         <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"><line x1="2" y1="2" x2="8" y2="8" /><line x1="8" y1="2" x2="2" y2="8" /></svg>
                     </WinBtn>
                 </div>
             </div>
+
+            {pendingAppClose && (
+                <UnsavedChangesModal
+                    onComplete={() => window.electronAPI?.close()}
+                    onCancel={() => setPendingAppClose(false)}
+                />
+            )}
         </header>
     )
 }

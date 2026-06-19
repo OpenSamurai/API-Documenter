@@ -81,13 +81,25 @@ export function RequestEditor({ apiId }: Props) {
 
     useEffect(() => {
         if (!api) return
-        setName(api.name || ''); setDescription(api.description || ''); setMethod(api.method || 'GET')
-        setPath(api.path || ''); setUrlParams(api.urlParams || []); setHeaders(api.headers || [])
-        setBodyType(api.bodyType || 'none'); setRequestBody(api.requestBody || '')
-        setRawType(api.rawType || 'json')
-        setFormData(api.formData || [])
-        setUrlencoded(api.urlencoded || [])
-        setResponses(api.responseExamples || []); setSaved(true)
+        
+        const draft = useAppStore.getState().apiDrafts[api.id]
+        if (draft) {
+            setName(draft.name); setDescription(draft.description); setMethod(draft.method)
+            setPath(draft.path); setUrlParams(draft.urlParams); setHeaders(draft.headers)
+            setBodyType(draft.bodyType); setRequestBody(draft.requestBody)
+            setRawType(draft.rawType)
+            setFormData(draft.formData)
+            setUrlencoded(draft.urlencoded)
+            setResponses(draft.responses); setSaved(draft.saved)
+        } else {
+            setName(api.name || ''); setDescription(api.description || ''); setMethod(api.method || 'GET')
+            setPath(api.path || ''); setUrlParams(api.urlParams || []); setHeaders(api.headers || [])
+            setBodyType(api.bodyType || 'none'); setRequestBody(api.requestBody || '')
+            setRawType(api.rawType || 'json')
+            setFormData(api.formData || [])
+            setUrlencoded(api.urlencoded || [])
+            setResponses(api.responseExamples || []); setSaved(true)
+        }
         setLiveResponse(null)
     }, [api])
 
@@ -104,6 +116,11 @@ export function RequestEditor({ apiId }: Props) {
                 JSON.stringify(responses) !== JSON.stringify(api.responseExamples)
             
             setSaved(!dirty)
+            if (dirty) {
+                useAppStore.getState().setApiDraft(api.id, { name, description, method, path, urlParams, headers, bodyType, rawType, formData, urlencoded, requestBody, responses, saved: false, version: api.version })
+            } else {
+                useAppStore.getState().clearApiDraft(api.id)
+            }
         }, 500) // Debounce for 500ms
 
         return () => clearTimeout(timeout)
@@ -117,6 +134,7 @@ export function RequestEditor({ apiId }: Props) {
             responseExamples: responses, version: (api.version || 0) + 1
         })
         setSaved(true)
+        useAppStore.getState().clearApiDraft(api.id)
     }, [api, name, description, method, path, urlParams, headers, bodyType, rawType, formData, urlencoded, requestBody, responses, updateApi])
 
     const updateContentType = useCallback((type: BodyType, rType: RawType) => {
@@ -452,7 +470,7 @@ export function RequestEditor({ apiId }: Props) {
                             variables={variablesMap}
                             placeholder="https://api.example.com/endpoint"
                             onKeyDown={e => e.key === 'Enter' && sendRequest()}
-                            style={{ flex: 1, fontFamily: 'monospace', fontSize: '13px', background: '#0F0F0F', border: '1px solid #2A2A2A', borderRadius: '10px', height: '40px', transition: '150ms ease' }}
+                            style={{ flex: 1, fontFamily: 'monospace', fontSize: '13px', background: '#0F0F0F', borderWidth: '1px', borderStyle: 'solid', borderColor: '#2A2A2A', borderRadius: '10px', height: '40px', transition: '150ms ease' }}
                         />
 
                         {/* Send */}

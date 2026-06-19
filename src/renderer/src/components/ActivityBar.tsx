@@ -10,7 +10,7 @@ export function ActivityBar() {
     const qc = useQueryClient()
     const { 
         activeSidebarTab, setActiveSidebarTab, 
-        setShowDatabaseSettings, setShowRbacSettings, setShowDeploySettings,
+        setShowDatabaseSettings, setShowRbacSettings, setShowDeploySettings, setShowGeneralSettings, openDocsTab,
         currentProjectId, activeBranch, currentSyncBranch, isSyncing, databaseUrl,
         isTeamWorkspace
     } = useAppStore()
@@ -62,23 +62,45 @@ export function ActivityBar() {
                 {currentProjectId && !isTeamWorkspace && (
                     <>
                         <ActivityItem 
+                            icon="document" 
+                            isActive={false} 
+                            onClick={() => openDocsTab()} 
+                            title="Generate API Docs"
+                        />
+                        <ActivityItem 
                             icon="database" 
                             isActive={false} 
                             onClick={() => setShowDatabaseSettings(true)} 
                             title="Database Settings"
                         />
-                        <ActivityItem 
-                            icon="users" 
-                            isActive={false} 
-                            onClick={() => setShowRbacSettings(true)} 
-                            title="Team & Permissions (RBAC)"
-                        />
+                        {activeBranch === currentSyncBranch && (
+                            <ActivityItem 
+                                icon="users" 
+                                isActive={false} 
+                                onClick={() => setShowRbacSettings(true)} 
+                                title="Team & Permissions (RBAC)"
+                            />
+                        )}
                         <ActivityItem 
                             icon="deploy" 
                             isActive={false} 
                             onClick={() => setShowDeploySettings(true)} 
                             title="Deploy Proxy"
                         />
+                        <ActivityItem 
+                            icon="settings" 
+                            isActive={false} 
+                            onClick={() => setShowGeneralSettings(true)} 
+                            title="Project Settings"
+                        />
+                        {project?.localPath && (
+                            <ActivityItem 
+                                icon="folderOpen" 
+                                isActive={false} 
+                                onClick={() => (window as any).electronAPI.openInExplorer(project.localPath)} 
+                                title="Open in Explorer"
+                            />
+                        )}
                     </>
                 )}
             </div>
@@ -212,6 +234,18 @@ function ActivityItem({ icon, isActive, onClick, title }: { icon: string, isActi
                         <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
                         <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
                         <line x1="12" y1="22.08" x2="12" y2="12" />
+                    </svg>
+                ) : icon === 'document' ? (
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline>
+                    </svg>
+                ) : icon === 'settings' ? (
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.72v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle>
+                    </svg>
+                ) : icon === 'folderOpen' ? (
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"></path><path d="M2 10h20"></path>
                     </svg>
                 ) : (
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">

@@ -7,7 +7,7 @@
   **Postman Power + Enterprise Control + 100% Data Ownership.**
 
   [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-  [![Version](https://img.shields.io/badge/version-1.0.24-emerald.svg)](package.json)
+  [![Version](https://img.shields.io/badge/version-1.0.25-emerald.svg)](package.json)
   [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
   [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)](#)
 </div>

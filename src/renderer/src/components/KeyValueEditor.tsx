@@ -189,7 +189,7 @@ export function KeyValueEditor({ pairs, onChange, keyPlaceholder = 'Key', valueP
                             style={{
                                 width: '100%', fontFamily: 'monospace', fontSize: '11px',
                                 height: '32px', borderRadius: '8px',
-                                background: '#0A0A0A', border: '1px solid #2A2A2A',
+                                background: '#0A0A0A', borderWidth: '1px', borderStyle: 'solid', borderColor: '#2A2A2A',
                                 transition: '150ms ease',
                                 cursor: readOnly ? 'default' : 'text'
                             }}

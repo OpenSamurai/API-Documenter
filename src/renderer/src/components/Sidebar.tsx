@@ -2,13 +2,15 @@ import { useState, useEffect } from 'react'
 import { useAppStore } from '@/stores/appStore'
 import { useProjects, useSyncProject } from '@/hooks/useProjects'
 import { useFolders, useDeleteFolder } from '@/hooks/useFolders'
-import { useApis, useDeleteApi } from '@/hooks/useApis'
+import { useApis, useDeleteApi, useUpdateApi, useAllProjectApis } from '@/hooks/useApis'
 import { useSync } from '@/hooks/useSync'
 import { METHOD_COLORS } from '@/types'
 import type { Project, Folder, ApiCollection } from '@/types'
 import { useQueryClient } from '@tanstack/react-query'
+import { db } from '@/db'
 
 import { ConfirmModal } from './ConfirmModal'
+import { UnsavedChangesModal } from './UnsavedChangesModal'
 import { EnvironmentSelector } from './EnvironmentSelector'
 
 export function Sidebar() {
@@ -27,7 +29,8 @@ export function Sidebar() {
     const setShowDeploySettings = useAppStore(s => s.setShowDeploySettings)
     const setShowGeneralSettings = useAppStore(s => s.setShowGeneralSettings)
     const setShowTeamConnect = useAppStore(s => s.setShowTeamConnect)
-    const setShowApiDocumentation = useAppStore(s => s.setShowApiDocumentation)
+    const openDocsTab = useAppStore(s => s.openDocsTab)
+    const validateTabs = useAppStore(s => s.validateTabs)
     const setEditingFolderId = useAppStore(s => s.setEditingFolderId)
     const isSidebarCollapsed = useAppStore(s => s.isSidebarCollapsed)
     const toggleSidebar = useAppStore(s => s.toggleSidebar)
@@ -41,6 +44,14 @@ export function Sidebar() {
 
     const { data: projects } = useProjects()
     const { data: folders, isLoading: isFoldersLoading, error: foldersError } = useFolders(currentProjectId)
+    const { data: allApis } = useAllProjectApis(currentProjectId)
+    
+    useEffect(() => {
+        if (allApis) {
+            validateTabs(allApis.map(a => a.id))
+        }
+    }, [allApis, validateTabs])
+
     const { syncNow } = useSync()
     const deleteFolder = useDeleteFolder()
     const deleteApi = useDeleteApi()
@@ -51,6 +62,19 @@ export function Sidebar() {
     const [isActionsExpanded, setIsActionsExpanded] = useState(false)
     const [version, setVersion] = useState<string>('')
     const [projectDdOpen, setProjectDdOpen] = useState(false)
+    const [pendingAction, setPendingAction] = useState<(() => void) | null>(null)
+    const updateApi = useUpdateApi()
+    const apiDrafts = useAppStore(s => s.apiDrafts)
+
+    const handleProjectChange = (action: () => void) => {
+        setProjectDdOpen(false)
+        const draftsCount = Object.keys(useAppStore.getState().apiDrafts).length
+        if (draftsCount > 0) {
+            setPendingAction(() => action)
+        } else {
+            action()
+        }
+    }
 
     useEffect(() => {
         ; (window as any).electronAPI.getAppVersion().then(setVersion)
@@ -126,7 +150,7 @@ export function Sidebar() {
                         <span style={{ fontSize: 'calc(13px * var(--font-scale))', fontWeight: 600, color: 'white', letterSpacing: '-0.01em' }}>API Documenter</span>
                     </div>
                     {currentProjectId && (
-                        <button onClick={() => selectProject(null)} className="rounded-lg group"
+                        <button onClick={() => handleProjectChange(() => selectProject(null))} className="rounded-lg group"
                             style={{ width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6B7280', transition: '150ms ease' }}
                             onMouseEnter={e => { e.currentTarget.style.background = '#151515'; e.currentTarget.style.color = '#FFFFFF' }}
                             onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#6B7280' }}
@@ -191,7 +215,7 @@ export function Sidebar() {
                                 {!isTeamWorkspace ? (
                                     <>
                                         <div style={{ padding: '6px 10px', fontSize: '9px', fontWeight: 800, color: '#444', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Connect</div>
-                                        <div onClick={() => { setShowTeamConnect(true); setProjectDdOpen(false) }}
+                                        <div onClick={() => handleProjectChange(() => { setShowTeamConnect(true); setProjectDdOpen(false) })}
                                             className="group"
                                             style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px', borderRadius: '8px', cursor: 'pointer', transition: '150ms ease' }}
                                             onMouseEnter={e => e.currentTarget.style.background = '#1A1A1A'}
@@ -208,7 +232,7 @@ export function Sidebar() {
                                             {projects?.map(p => {
                                                 const isSel = p.id === currentProjectId
                                                 return (
-                                                    <div key={p.id} onClick={() => { selectProject(p.id); setProjectDdOpen(false) }}
+                                                    <div key={p.id} onClick={() => handleProjectChange(() => { selectProject(p.id); setProjectDdOpen(false) })}
                                                         className="group"
                                                         style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px', borderRadius: '8px', cursor: 'pointer', background: isSel ? 'rgba(255,255,255,0.03)' : 'transparent', transition: '150ms ease' }}
                                                         onMouseEnter={e => e.currentTarget.style.background = isSel ? 'rgba(255,255,255,0.05)' : '#1A1A1A'}
@@ -226,7 +250,7 @@ export function Sidebar() {
                                         {currentProjectId && (
                                             <>
                                                 <div style={{ height: '1px', background: '#1F1F1F', margin: '6px 4px' }} />
-                                                <div onClick={() => { selectProject(null); setProjectDdOpen(false) }}
+                                                <div onClick={() => handleProjectChange(() => { selectProject(null); setProjectDdOpen(false) })}
                                                     className="group"
                                                     style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px', borderRadius: '8px', cursor: 'pointer', transition: '150ms ease' }}
                                                     onMouseEnter={e => e.currentTarget.style.background = 'rgba(248, 113, 113, 0.1)'}
@@ -241,7 +265,7 @@ export function Sidebar() {
                                     </>
                                 ) : (
                                     <>
-                                        <div onClick={() => { setTeamWorkspace(false); setProjectDdOpen(false) }}
+                                        <div onClick={() => handleProjectChange(() => { setTeamWorkspace(false); setProjectDdOpen(false) })}
                                             className="group"
                                             style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px', borderRadius: '8px', cursor: 'pointer', transition: '150ms ease' }}
                                             onMouseEnter={e => e.currentTarget.style.background = 'rgba(248, 113, 113, 0.1)'}
@@ -349,7 +373,7 @@ export function Sidebar() {
                                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                             >
                                 <span className="text-[11px] tracking-[0.1em] uppercase font-semibold" style={{ color: '#6B7280' }}>
-                                    Project Actions
+                                    Actions
                                 </span>
                                 <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="#6B7280" strokeWidth="1.5" strokeLinecap="round"
                                     style={{ transform: isActionsExpanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 200ms ease' }}>
@@ -368,27 +392,16 @@ export function Sidebar() {
                                         <ActionBtn icon="plus" label="New Endpoint" onClick={() => setShowCreateApi(true)} />
                                     )}
 
-                                    <div style={{ height: '1px', background: '#1A1A1A', margin: '4px 8px' }} />
-
-                                    {!isTeamWorkspace && (
-                                        <ActionBtn icon="settings" label="Project Settings" onClick={() => setShowGeneralSettings(true)} />
-                                    )}
-
                                     {!isTeamWorkspace && activeBranch === currentSyncBranch && (
-                                        <ActionBtn 
-                                            icon="deploy" 
-                                            label={isSyncing ? 'Pushing...' : 'Push all to branch'} 
-                                            onClick={() => syncNow(false, true)} 
-                                            disabled={isSyncing}
-                                        />
-                                    )}
-
-                                    {!isTeamWorkspace && (
-                                        <ActionBtn icon="document" label="Generate API Docs" onClick={() => setShowApiDocumentation(true)} />
-                                    )}
-
-                                    {p?.localPath && !isTeamWorkspace && (
-                                        <ActionBtn icon="folderOpen" label="Open in Explorer" onClick={() => (window as any).electronAPI.openInExplorer(p.localPath)} />
+                                        <>
+                                            <div style={{ height: '1px', background: '#1A1A1A', margin: '8px 16px' }} />
+                                            <ActionBtn 
+                                                icon="deploy" 
+                                                label={isSyncing ? 'Pushing...' : 'Push all to branch'} 
+                                                onClick={() => syncNow(false, true)} 
+                                                disabled={isSyncing}
+                                            />
+                                        </>
                                     )}
                                 </div>
                             )}
@@ -513,6 +526,17 @@ export function Sidebar() {
                     onCancel={() => setConfirmDelete(null)}
                 />
             )}
+
+            {/* ══ Unsaved Changes Modal ══ */}
+            {pendingAction && (
+                <UnsavedChangesModal
+                    onComplete={() => {
+                        pendingAction()
+                        setPendingAction(null)
+                    }}
+                    onCancel={() => setPendingAction(null)}
+                />
+            )}
         </>
     )
 }
@@ -530,6 +554,8 @@ interface FolderItemProps {
 
 function FolderItem({ folder, isOpen, isActive, activeApi, onToggle, onSelectApi, onCtx, ctx, setCtx, databaseUrl }: FolderItemProps) {
     const { data: apis, isLoading, error } = useApis(isOpen ? folder.id : null)
+    const apiDrafts = useAppStore(s => s.apiDrafts)
+    const activeApiUnsaved = useAppStore(s => s.activeApiUnsaved)
 
     return (
         <div>
@@ -589,6 +615,7 @@ function FolderItem({ folder, isOpen, isActive, activeApi, onToggle, onSelectApi
                         </div>
                     ) : apis.map((a: ApiCollection) => {
                         const isAct = activeApi === a.id
+                        const hasDraft = isAct ? activeApiUnsaved : !!apiDrafts[a.id]
                         return (
                             <div key={a.id}
                                 className="rounded-lg cursor-pointer"
@@ -620,10 +647,13 @@ function FolderItem({ folder, isOpen, isActive, activeApi, onToggle, onSelectApi
                                     )
                                 })()}
 
-                                <span className="text-[13px] font-medium truncate"
-                                    style={{ color: isAct ? '#FFFFFF' : '#9CA3AF', transition: '150ms ease', flex: 1 }}>
-                                    {a.name || a.path}
-                                </span>
+                                <div className="truncate" style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <span className="text-[13px] font-medium truncate"
+                                        style={{ color: isAct ? '#FFFFFF' : '#9CA3AF', transition: '150ms ease' }}>
+                                        {a.name || a.path}
+                                    </span>
+                                    {hasDraft && <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#F59E0B', flexShrink: 0 }} title="Unsaved changes" />}
+                                </div>
 
                                 {/* 3 dots menu button for API */}
                                 <button
