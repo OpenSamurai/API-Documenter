@@ -3,8 +3,9 @@ import CodeMirror from '@uiw/react-codemirror'
 import { json } from '@codemirror/lang-json'
 import { html } from '@codemirror/lang-html'
 import { vscodeDark } from '@uiw/codemirror-theme-vscode'
-import { EditorView } from '@codemirror/view'
+import { EditorView, ViewPlugin, ViewUpdate } from '@codemirror/view'
 import { foldAll, unfoldAll } from '@codemirror/language'
+import { openSearchPanel, search, getSearchQuery } from '@codemirror/search'
 
 export interface HttpResponse {
     success: boolean
@@ -29,17 +30,68 @@ export function ResponsePanel({ response, loading, onSaveAsExample }: Props) {
     const [tab, setTab] = useState<Tab>('body')
     const [copied, setCopied] = useState(false)
     const editorRef = useRef<any>(null)
+    const topRef = useRef<HTMLDivElement>(null)
+    const bottomRef = useRef<HTMLDivElement>(null)
 
     const contentType = response?.headers?.['content-type']?.toLowerCase() || ''
     const extensions = useMemo(() => {
         const exts = [
             vscodeDark,
             EditorView.lineWrapping,
+            search({ top: true }),
+            searchMatchCounter,
+            EditorView.scrollMargins.of(() => ({ top: 100, bottom: 50 })),
             EditorView.theme({
                 '&': { fontSize: '12px', background: '#0F0F0F !important' },
                 '.cm-gutters': { background: '#0F0F0F', border: 'none', color: '#4B5563' },
                 '.cm-content': { padding: '16px 0' },
-                '.cm-line': { padding: '0 16px' }
+                '.cm-line': { padding: '0 16px' },
+                '.cm-panels': { background: 'transparent', color: '#FFFFFF', border: 'none' },
+                '.cm-panels-top': {
+                    position: 'sticky',
+                    top: '10px',
+                    zIndex: 100,
+                    border: '1px solid #2A2A2A',
+                    borderRadius: '8px',
+                    background: '#151515',
+                    boxShadow: '0 4px 16px rgba(0,0,0,0.6)',
+                    width: 'max-content',
+                    marginLeft: 'auto',
+                    marginRight: '16px'
+                },
+                '.cm-panel.cm-search': { padding: '6px 12px', display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' },
+                '.cm-panel.cm-search input[type="text"]': { background: '#0F0F0F', border: '1px solid #2A2A2A', borderRadius: '4px', color: '#FFFFFF', padding: '10px 8px', fontSize: '12px', outline: 'none', width: '240px !important', minWidth: '240px !important' },
+
+                /* Buttons */
+                '.cm-panel.cm-search button': { background: 'transparent', border: 'none', color: 'transparent !important', width: '24px', height: '24px', padding: 0, cursor: 'pointer', position: 'relative', transition: '150ms ease', borderRadius: '4px', overflow: 'hidden' },
+                '.cm-panel.cm-search button:hover': { background: '#2A2A2A' },
+                '.cm-panel.cm-search button::after': { color: '#9CA3AF', position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', fontSize: '14px', fontWeight: 'bold' },
+                '.cm-panel.cm-search button[name="next"]::after': { content: '"↓"' },
+                '.cm-panel.cm-search button[name="prev"]::after': { content: '"↑"' },
+                '.cm-panel.cm-search button[name="select"]::after': { content: '"≡"', fontSize: '16px' },
+                '.cm-panel.cm-search button[name="close"]': { position: 'relative !important', marginLeft: '8px', right: 'auto !important', top: 'auto !important' },
+                '.cm-panel.cm-search button[name="replace_toggle"]': { display: 'none !important' },
+                '.cm-panel.cm-search button[name="close"]::after': { content: '"✕"', fontSize: '12px' },
+
+                /* Checkboxes */
+                '.cm-panel.cm-search label': { fontSize: '0 !important', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', position: 'relative', width: '24px', height: '24px', background: 'transparent', borderRadius: '4px', transition: '150ms ease', margin: '0 !important', color: 'transparent !important' },
+                '.cm-panel.cm-search label:hover': { background: '#2A2A2A' },
+                '.cm-panel.cm-search label input[type="checkbox"]': { opacity: 0, position: 'absolute', inset: 0, margin: 0, cursor: 'pointer', width: '100%', height: '100%' },
+                '.cm-panel.cm-search label::after': { color: '#9CA3AF', position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', fontWeight: 'bold' },
+                '.cm-panel.cm-search label:nth-of-type(1)::after': { content: '"Aa"', fontSize: '12px' },
+                '.cm-panel.cm-search label:nth-of-type(2)::after': { content: '".*"', fontSize: '12px' },
+                '.cm-panel.cm-search label:nth-of-type(3)::after': { content: '"ab"', fontSize: '11px' },
+
+                /* Checked state */
+                '.cm-panel.cm-search label:has(input:checked)': { background: '#1F1F1F', border: '1px solid #4ade80' },
+                '.cm-panel.cm-search label:has(input:checked)::after': { color: '#4ade80' },
+
+                /* Tooltips */
+                '.cm-panel.cm-search label::before': { position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)', background: '#000', color: '#FFF', padding: '4px 8px', fontSize: '10px', borderRadius: '4px', marginTop: '4px', whiteSpace: 'nowrap', zIndex: 100, opacity: 0, pointerEvents: 'none', transition: '150ms ease' },
+                '.cm-panel.cm-search label:hover::before': { opacity: 1 },
+                '.cm-panel.cm-search label:nth-of-type(1)::before': { content: '"Match Case"' },
+                '.cm-panel.cm-search label:nth-of-type(2)::before': { content: '"Regular Expression"' },
+                '.cm-panel.cm-search label:nth-of-type(3)::before': { content: '"Whole Word"' }
             })
         ]
         if (contentType.includes('json')) exts.push(json())
@@ -79,12 +131,12 @@ export function ResponsePanel({ response, loading, onSaveAsExample }: Props) {
     /* ═══ Error state ═══ */
     if (!response.success) {
         return (
-            <div style={{ background: '#111111', border: '1px solid #1F1F1F', borderRadius: '12px', overflow: 'hidden' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '0 16px', height: '44px', borderBottom: '1px solid #1F1F1F', background: '#151515' }}>
+            <div style={{ background: '#111111', border: '1px solid #1F1F1F', borderRadius: '12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '0 16px', height: '44px', borderBottom: '1px solid #1F1F1F', background: '#151515', borderTopLeftRadius: '11px', borderTopRightRadius: '11px' }}>
                     <span style={{ fontSize: '13px', fontWeight: 600, color: '#FFFFFF' }}>Error</span>
                     <span style={{ fontSize: '11px', fontFamily: 'monospace', color: '#6B7280', marginLeft: 'auto' }}>{response.time}ms</span>
                 </div>
-                <div style={{ padding: '16px' }}>
+                <div style={{ padding: '16px', borderBottomLeftRadius: '11px', borderBottomRightRadius: '11px' }}>
                     <p style={{ fontSize: '12px', fontFamily: 'monospace', lineHeight: 1.6, color: '#A1A1A1', margin: 0 }}>
                         {response.error}
                     </p>
@@ -118,10 +170,10 @@ export function ResponsePanel({ response, loading, onSaveAsExample }: Props) {
     }
 
     return (
-        <div style={{ background: '#111111', border: '1px solid #1F1F1F', borderRadius: '12px', overflow: 'hidden' }}>
+        <div style={{ background: '#111111', border: '1px solid #1F1F1F', borderRadius: '12px' }}>
 
             {/* ── Status bar ── */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '0 16px', height: '44px', borderBottom: '1px solid #1F1F1F', background: '#151515' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '0 16px', height: '44px', borderBottom: '1px solid #1F1F1F', background: '#151515', borderTopLeftRadius: '11px', borderTopRightRadius: '11px' }}>
                 {/* Status */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: getStatusColor(response.status) }} />
@@ -161,6 +213,7 @@ export function ResponsePanel({ response, loading, onSaveAsExample }: Props) {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: 'auto' }}>
                     {tab === 'body' && (
                         <>
+                            <SmallBtn onClick={() => editorRef.current?.view && openSearchPanel(editorRef.current.view)}>Search</SmallBtn>
                             <SmallBtn onClick={() => editorRef.current?.view && foldAll(editorRef.current.view)}>Collapse All</SmallBtn>
                             <SmallBtn onClick={() => editorRef.current?.view && unfoldAll(editorRef.current.view)}>Expand All</SmallBtn>
                         </>
@@ -173,9 +226,20 @@ export function ResponsePanel({ response, loading, onSaveAsExample }: Props) {
             </div>
 
             {/* ── Content ── */}
-            <div style={{ background: '#0F0F0F' }}>
+            <div style={{ background: '#0F0F0F', borderBottomLeftRadius: '11px', borderBottomRightRadius: '11px' }}>
                 {tab === 'body' && (
-                    <div style={{ background: '#0F0F0F', minHeight: '100px' }}>
+                    <div style={{ position: 'relative', background: '#0F0F0F', minHeight: '100px', borderBottomLeftRadius: '11px', borderBottomRightRadius: '11px' }}>
+                        <div ref={topRef} style={{ position: 'absolute', top: '-100px' }} />
+                        <div style={{ position: 'sticky', top: '80px', height: 0, zIndex: 50, pointerEvents: 'none' }}>
+                            <div style={{ position: 'absolute', right: '24px', display: 'flex', flexDirection: 'column', gap: '8px', pointerEvents: 'auto' }}>
+                                <FloatBtn icon={
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+                                } onClick={() => topRef.current?.scrollIntoView({ behavior: 'smooth' })} />
+                                <FloatBtn icon={
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>
+                                } onClick={() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' })} />
+                            </div>
+                        </div>
                         <CodeMirror
                             ref={editorRef}
                             value={prettyBody || ''}
@@ -193,6 +257,7 @@ export function ResponsePanel({ response, loading, onSaveAsExample }: Props) {
                                 indentOnInput: false,
                             }}
                         />
+                        <div ref={bottomRef} style={{ height: '24px' }} />
                     </div>
                 )}
 
@@ -259,3 +324,79 @@ function SmallBtn({ children, onClick }: { children: React.ReactNode; onClick?: 
         </button>
     )
 }
+
+function FloatBtn({ icon, onClick }: { icon: React.ReactNode; onClick?: () => void }) {
+    return (
+        <button onClick={onClick}
+            style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#2A2A2A', border: '1px solid #3A3A3A', color: '#9CA3AF', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 4px 12px rgba(0,0,0,0.5)', transition: '150ms ease' }}
+            onMouseEnter={e => { e.currentTarget.style.background = '#FFFFFF'; e.currentTarget.style.color = '#000000'; e.currentTarget.style.borderColor = '#FFFFFF' }}
+            onMouseLeave={e => { e.currentTarget.style.background = '#2A2A2A'; e.currentTarget.style.color = '#9CA3AF'; e.currentTarget.style.borderColor = '#3A3A3A' }}>
+            {icon}
+        </button>
+    )
+}
+
+const searchMatchCounter = ViewPlugin.fromClass(class {
+    countEl: HTMLElement | null = null;
+
+    constructor(view: EditorView) {
+        setTimeout(() => this.updateCount(view), 50);
+    }
+
+    update(update: ViewUpdate) {
+        if (update.docChanged || update.selectionSet || update.state !== update.startState) {
+            setTimeout(() => this.updateCount(update.view), 10);
+        }
+    }
+
+    updateCount(view: EditorView) {
+        const panel = view.dom.querySelector('.cm-search');
+        if (!panel) {
+            this.countEl = null;
+            return;
+        }
+
+        if (!this.countEl) {
+            this.countEl = document.createElement('span');
+            this.countEl.className = 'custom-search-count';
+            Object.assign(this.countEl.style, {
+                fontSize: '11px',
+                color: '#4ade80',
+                marginLeft: '8px',
+                marginRight: '8px',
+                fontFamily: 'monospace',
+                minWidth: '45px',
+                textAlign: 'center'
+            });
+            const input = panel.querySelector('input[name="search"]');
+            if (input && input.nextSibling) {
+                input.parentNode?.insertBefore(this.countEl, input.nextSibling);
+            }
+        }
+
+        const query = getSearchQuery(view.state);
+        if (query && query.valid && query.search) {
+            let cursor = query.getCursor(view.state.doc);
+            let total = 0;
+            let current = 0;
+            let selStart = view.state.selection.main.from;
+
+            let match = cursor.next();
+            while (!match.done) {
+                total++;
+                if (match.value.from <= selStart) current = total;
+                if (total > 1000) break;
+                match = cursor.next();
+            }
+            if (total > 0) {
+                this.countEl.textContent = `${current || 1} of ${total > 1000 ? '1000+' : total}`;
+                this.countEl.style.color = '#4ade80';
+            } else {
+                this.countEl.textContent = '0 of 0';
+                this.countEl.style.color = '#f87171';
+            }
+        } else {
+            this.countEl.textContent = '';
+        }
+    }
+})

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { ResponseExample, ResponseExampleMetadata, KeyValuePair } from '@/types'
 import { v4 as uuid } from 'uuid'
+import { CodeEditor } from './CodeEditor'
 
 interface Props {
     examples: ResponseExample[]
@@ -288,18 +289,15 @@ function ExampleCard({ example, index, onUpdate, onUpdateMeta }: ExampleCardProp
             </div>
 
             {/* ── Response Body ── */}
-            <div style={{ borderTop: '1px solid #1F1F1F' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 20px', flexShrink: 0, background: '#151515' }}>
+            <div style={{ borderTop: '1px solid #1F1F1F', padding: '16px' }}>
+                <div style={{ marginBottom: '8px' }}>
                     <span style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#6B7280' }}>Response Body</span>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <SmallBtn onClick={() => { navigator.clipboard.writeText(example.body) }}>Copy</SmallBtn>
-                        <SmallBtn onClick={() => { try { onUpdate(index, 'body', JSON.stringify(JSON.parse(example.body), null, 2)) } catch { } }}>Format</SmallBtn>
-                    </div>
                 </div>
-                <textarea value={example.body} onChange={e => onUpdate(index, 'body', e.target.value)}
-                    placeholder={'{\n  "message": "Success"\n}'}
-                    style={{ width: '100%', padding: '16px 20px', fontSize: '11px', fontFamily: 'monospace', resize: 'none', background: '#0F0F0F', color: '#A1A1A1', border: 'none', minHeight: '180px', tabSize: 2, lineHeight: 1.8, outline: 'none' }}
-                    spellCheck={false} />
+                <CodeEditor 
+                    value={example.body} 
+                    onChange={v => onUpdate(index, 'body', v)} 
+                    language={example.metadata?.contentType === 'application/xml' || example.metadata?.contentType === 'text/html' ? 'html' : (example.metadata?.contentType === 'text/plain' ? 'text' : 'json')}
+                />
             </div>
 
             {/* ── Footer ── */}
