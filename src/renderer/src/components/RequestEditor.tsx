@@ -363,6 +363,17 @@ export function RequestEditor({ apiId }: Props) {
         }
     }, [path, method, urlParams, headers, bodyType, rawType, formData, urlencoded, requestBody, sending, environments, currentEnvironmentId, resolveVariables])
 
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                e.preventDefault()
+                sendRequest()
+            }
+        }
+        window.addEventListener('keydown', handleKeyDown)
+        return () => window.removeEventListener('keydown', handleKeyDown)
+    }, [sendRequest])
+
     const saveAsExample = (status: number, body: string, resHeaders: Record<string, string>) => {
         const headerPairs: KeyValuePair[] = Object.entries(resHeaders).map(([k, v]) => ({ id: uuid(), key: k, value: v, enabled: true }))
         const now = new Date().toISOString()
