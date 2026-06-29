@@ -232,7 +232,11 @@ export function Sidebar() {
                                             {projects?.map(p => {
                                                 const isSel = p.id === currentProjectId
                                                 return (
-                                                    <div key={p.id} onClick={() => handleProjectChange(() => { selectProject(p.id); setProjectDdOpen(false) })}
+                                                    <div key={p.id} onClick={() => handleProjectChange(() => { 
+                                                        selectProject(p.id); 
+                                                        setProjectDdOpen(false);
+                                                        ;(window as any).electronAPI.addRecentProject({ id: p.id, name: p.name, localPath: p.localPath })
+                                                    })}
                                                         className="group"
                                                         style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px', borderRadius: '8px', cursor: 'pointer', background: isSel ? 'rgba(255,255,255,0.03)' : 'transparent', transition: '150ms ease' }}
                                                         onMouseEnter={e => e.currentTarget.style.background = isSel ? 'rgba(255,255,255,0.05)' : '#1A1A1A'}

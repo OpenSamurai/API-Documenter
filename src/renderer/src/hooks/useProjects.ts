@@ -321,9 +321,11 @@ export function useDeleteProject() {
                 })
 
                 // Remove from recent projects list
-                fireAndForgetFileWrite('removeRecentProject', () =>
-                    (window as any).electronAPI.removeRecentProject(id)
-                )
+                try {
+                    await (window as any).electronAPI.removeRecentProject(id)
+                } catch (e) {
+                    console.error('[Delete] Failed to remove from recent projects:', e)
+                }
 
                 // Note: We do NOT delete the project directory from disk.
                 // The user can re-import it or use git.

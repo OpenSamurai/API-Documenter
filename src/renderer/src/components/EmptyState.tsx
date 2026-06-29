@@ -1,10 +1,25 @@
+import React from 'react'
 import { useAppStore } from '@/stores/appStore'
+import { useProjects } from '@/hooks/useProjects'
 import icon from '@/assets/icon.jpg'
 
 interface Props { hasProject: boolean }
 
 export function EmptyState({ hasProject }: Props) {
-    const { setShowCreateProject, isOnline } = useAppStore()
+    const { setShowCreateProject, isOnline, selectProject } = useAppStore()
+    const { data: projects } = useProjects()
+    const [recentProjects, setRecentProjects] = React.useState<any[]>([])
+
+    React.useEffect(() => {
+        if (!hasProject) {
+            (window as any).electronAPI.getRecentProjects().then(setRecentProjects)
+        }
+    }, [hasProject])
+
+    const validRecentProjects = React.useMemo(() => {
+        if (!projects || !recentProjects) return []
+        return recentProjects.filter(rp => projects.some(p => p.id === rp.id))
+    }, [recentProjects, projects])
 
     if (hasProject) {
         return (
@@ -33,10 +48,10 @@ export function EmptyState({ hasProject }: Props) {
             />
 
             {/* Main Content Stack */}
-            <div className="fade-up" style={{ position: 'relative', zIndex: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', maxWidth: '600px', width: '100%', padding: '0 32px', paddingBottom: '60px' }}>
+            <div className="fade-up" style={{ position: 'relative', zIndex: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', maxWidth: '600px', width: '100%', padding: '0 32px' }}>
 
                 {/* 2. Hero Identity Mark */}
-                <div className="group cursor-default" style={{ marginBottom: '48px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div className="group cursor-default" style={{ marginBottom: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     {/* <div
                         className="transition-all duration-500 group-hover:scale-[1.02] group-hover:-translate-y-1"
                         style={{
@@ -64,7 +79,7 @@ export function EmptyState({ hasProject }: Props) {
                 </div>
 
                 {/* 3. Messaging Hierarchy */}
-                <div style={{ textAlign: 'center', marginBottom: '40px', marginTop: '10px' }}>
+                <div style={{ textAlign: 'center', marginBottom: '24px', marginTop: '10px' }}>
                     <h1 style={{ fontSize: '32px', fontWeight: 600, color: 'white', letterSpacing: '-0.04em', marginBottom: '12px', lineHeight: 1, margin: '0 0 12px 0' }}>
                         Welcome to API Documenter
                     </h1>
@@ -79,7 +94,7 @@ export function EmptyState({ hasProject }: Props) {
                 </div>
 
                 {/* 4. Decisive CTA Authority */}
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '24px', marginBottom: '64px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '24px', marginBottom: '32px' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
                         <button
                             onClick={() => setShowCreateProject(true)}
@@ -103,6 +118,42 @@ export function EmptyState({ hasProject }: Props) {
                         </button>
                     </div>
                 </div>
+
+                {/* 4.5. Recent Projects */}
+                {validRecentProjects.length > 0 && (
+                    <div style={{ width: '100%', maxWidth: '400px', marginBottom: '32px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        <h3 style={{ fontSize: '13px', fontWeight: 600, color: '#9CA3AF', margin: '0 0 4px 8px', letterSpacing: '0.025em' }}>Recent Projects</h3>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '160px', overflowY: 'auto', paddingRight: '8px' }} className="custom-scrollbar">
+                            {validRecentProjects.slice(0, 3).map(p => (
+                                <button key={p.id}
+                                    onClick={() => {
+                                        selectProject(p.id)
+                                        ;(window as any).electronAPI.addRecentProject({ id: p.id, name: p.name, localPath: p.localPath })
+                                    }}
+                                    className="group transition-all"
+                                    style={{ 
+                                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                        padding: '12px 16px', borderRadius: '10px', border: '1px solid #1F1F1F',
+                                        background: 'rgba(255,255,255,0.02)', color: '#FFFFFF', cursor: 'pointer',
+                                        textAlign: 'left'
+                                    }}
+                                    onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; e.currentTarget.style.borderColor = '#333333' }}
+                                    onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.02)'; e.currentTarget.style.borderColor = '#1F1F1F' }}
+                                >
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', overflow: 'hidden' }}>
+                                        <span style={{ fontSize: '14px', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</span>
+                                        {p.localPath && (
+                                            <span style={{ fontSize: '11px', color: '#6B7280', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.localPath}</span>
+                                        )}
+                                    </div>
+                                    <svg style={{ flexShrink: 0, color: '#4B5563', transition: 'color 150ms ease, transform 150ms ease' }} className="group-hover:text-white group-hover:translate-x-1" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <polyline points="9 18 15 12 9 6" />
+                                    </svg>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
 
                 {/* 5. Feature Highlights */}
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
