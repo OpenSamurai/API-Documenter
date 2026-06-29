@@ -27,6 +27,7 @@ import { ApiDocumentationPage } from './components/ApiDocumentationPage'
 import { ConflictResolutionDialog } from './components/ConflictResolutionDialog'
 
 export function App() {
+    const toggleSidebar = useAppStore(s => s.toggleSidebar)
     const currentApiId = useAppStore(s => s.currentApiId)
     const currentProjectId = useAppStore(s => s.currentProjectId)
     const isOnline = useAppStore(s => s.isOnline)
@@ -55,9 +56,19 @@ export function App() {
         const handleOffline = () => setIsOnline(false)
         window.addEventListener('online', handleOnline)
         window.addEventListener('offline', handleOffline)
+
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
+                e.preventDefault()
+                toggleSidebar()
+            }
+        }
+        window.addEventListener('keydown', handleKeyDown)
+
         return () => {
             window.removeEventListener('online', handleOnline)
             window.removeEventListener('offline', handleOffline)
+            window.removeEventListener('keydown', handleKeyDown)
         }
     }, [setIsOnline])
 
