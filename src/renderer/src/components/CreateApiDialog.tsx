@@ -77,6 +77,7 @@ export function CreateApiDialog() {
                             Name <span style={{ color: '#FFFFFF' }}>*</span>
                         </label>
                         <input value={name} onChange={e => setName(e.target.value)} placeholder="Login API" autoFocus
+                            onKeyDown={e => e.key === 'Enter' && submit()}
                             style={{
                                 width: '100%', boxSizing: 'border-box', height: '42px', padding: '0 14px', fontSize: '14px',
                                 background: '#0F0F0F', border: '1px solid #2A2A2A', borderRadius: '10px',
