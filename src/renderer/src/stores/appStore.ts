@@ -17,6 +17,7 @@ interface AppState {
     // UI state
     openTabs: OpenTab[]
     activeTabId: string | null
+    expandedFolders: Set<string>
     isOnline: boolean
     sidebarWidth: number
     activeEditorTab: EditorTab
@@ -58,6 +59,8 @@ interface AppState {
     // Actions
     scrollApi: (apiId: string | null, folderId?: string) => void
     selectProject: (id: string | null) => void
+    toggleFolder: (id: string) => void
+    setExpandedFolders: (folders: Set<string>) => void
     selectFolder: (id: string | null) => void
     selectApi: (apiId: string | null, folderId?: string) => void
     openDocsTab: () => void
@@ -104,6 +107,7 @@ export const useAppStore = create<AppState>((set) => ({
 
     openTabs: [],
     activeTabId: null,
+    expandedFolders: new Set(),
 
     isOnline: navigator.onLine,
     sidebarWidth: 300,
@@ -142,7 +146,37 @@ export const useAppStore = create<AppState>((set) => ({
     apiDrafts: {},
     activeApiUnsaved: false,
 
-    selectProject: (id) => set({ currentProjectId: id, currentFolderId: null, currentApiId: null, showApiDocumentation: false, openTabs: [], activeTabId: null }),
+    selectProject: (id) => set((state) => {
+        if (!id) {
+            return { currentProjectId: null, currentFolderId: null, currentApiId: null, showApiDocumentation: false, openTabs: [], activeTabId: null, expandedFolders: new Set(), currentEnvironmentId: null }
+        }
+        const saved = localStorage.getItem(`workspace_${id}`)
+        if (saved) {
+            try {
+                const parsed = JSON.parse(saved)
+                return {
+                    currentProjectId: id,
+                    openTabs: parsed.openTabs || [],
+                    activeTabId: parsed.activeTabId || null,
+                    currentApiId: parsed.currentApiId || null,
+                    currentFolderId: parsed.currentFolderId || null,
+                    expandedFolders: new Set(parsed.expandedFolders || []),
+                    currentEnvironmentId: parsed.currentEnvironmentId || null,
+                    showApiDocumentation: parsed.activeTabId === 'docs'
+                }
+            } catch (e) {
+                console.error("Failed to parse workspace state", e)
+            }
+        }
+        return { currentProjectId: id, currentFolderId: null, currentApiId: null, showApiDocumentation: false, openTabs: [], activeTabId: null, expandedFolders: new Set() }
+    }),
+    toggleFolder: (id) => set((s) => {
+        const newSet = new Set(s.expandedFolders)
+        if (newSet.has(id)) newSet.delete(id)
+        else newSet.add(id)
+        return { expandedFolders: newSet, currentFolderId: id }
+    }),
+    setExpandedFolders: (folders) => set({ expandedFolders: folders }),
     selectFolder: (id) => set({ currentFolderId: id }),
     selectApi: (apiId: string | null, folderId?: string) => set((s) => {
         if (!apiId) return { currentApiId: null, currentFolderId: folderId ?? s.currentFolderId, activeApiUnsaved: false }
@@ -254,3 +288,16 @@ export const useAppStore = create<AppState>((set) => ({
     }),
     setActiveApiUnsaved: (unsaved) => set({ activeApiUnsaved: unsaved }),
 }))
+
+useAppStore.subscribe((state) => {
+    if (state.currentProjectId) {
+        localStorage.setItem(`workspace_${state.currentProjectId}`, JSON.stringify({
+            openTabs: state.openTabs,
+            activeTabId: state.activeTabId,
+            currentApiId: state.currentApiId,
+            currentFolderId: state.currentFolderId,
+            expandedFolders: Array.from(state.expandedFolders || []),
+            currentEnvironmentId: state.currentEnvironmentId
+        }))
+    }
+})

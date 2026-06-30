@@ -327,6 +327,9 @@ export function useDeleteProject() {
                     console.error('[Delete] Failed to remove from recent projects:', e)
                 }
 
+                // Cleanup workspace UI state
+                localStorage.removeItem(`workspace_${id}`)
+
                 // Note: We do NOT delete the project directory from disk.
                 // The user can re-import it or use git.
             } else if (target === 'remote') {

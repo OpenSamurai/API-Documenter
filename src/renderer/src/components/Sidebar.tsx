@@ -56,7 +56,8 @@ export function Sidebar() {
     const deleteFolder = useDeleteFolder()
     const deleteApi = useDeleteApi()
 
-    const [expanded, setExpanded] = useState<Set<string>>(new Set())
+    const expanded = useAppStore(s => s.expandedFolders)
+    const toggleFolderStore = useAppStore(s => s.toggleFolder)
     const [ctx, setCtx] = useState<{ x: number; y: number; type: 'folder' | 'api'; id: string } | null>(null)
     const [confirmDelete, setConfirmDelete] = useState<{ type: 'folder' | 'api'; id: string; folderId?: string; projectId?: string } | null>(null)
     const [isActionsExpanded, setIsActionsExpanded] = useState(false)
@@ -88,7 +89,7 @@ export function Sidebar() {
     }, [])
 
     const toggle = (id: string) => {
-        setExpanded(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
+        toggleFolderStore(id)
         selectFolder(id)
     }
     const onCtx = (e: React.MouseEvent, type: 'folder' | 'api', id: string) => {
