@@ -92,7 +92,7 @@
     },
     "publish": {
       "provider": "github",
-      "owner": "PraneethKulukuri26",
+      "owner": "OpenSamurai",
       "repo": "API-Documenter"
     },
     "extraResources": [
