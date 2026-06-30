@@ -234,10 +234,16 @@ export function ResponsePanel({ response, loading, onSaveAsExample }: Props) {
                             <div style={{ position: 'absolute', right: '24px', display: 'flex', flexDirection: 'column', gap: '8px', pointerEvents: 'auto' }}>
                                 <FloatBtn icon={
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
-                                } onClick={() => topRef.current?.scrollIntoView({ behavior: 'smooth' })} />
+                                } onClick={() => {
+                                    const scroller = topRef.current?.closest('[style*="overflow-y: auto"], [style*="overflow: auto"]') as HTMLElement
+                                    if (scroller) scroller.scrollTo({ top: 0, behavior: 'smooth' })
+                                }} />
                                 <FloatBtn icon={
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>
-                                } onClick={() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' })} />
+                                } onClick={() => {
+                                    const scroller = bottomRef.current?.closest('[style*="overflow-y: auto"], [style*="overflow: auto"]') as HTMLElement
+                                    if (scroller) scroller.scrollTo({ top: scroller.scrollHeight, behavior: 'smooth' })
+                                }} />
                             </div>
                         </div>
                         <CodeMirror
