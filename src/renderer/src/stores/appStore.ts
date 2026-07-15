@@ -65,6 +65,8 @@ interface AppState {
     selectApi: (apiId: string | null, folderId?: string) => void
     openDocsTab: () => void
     closeTab: (tabId: string) => void
+    closeOtherTabs: (tabId: string) => void
+    closeAllTabs: () => void
     setActiveTab: (tabId: string) => void
     validateTabs: (validApiIds: string[]) => void
     selectEnvironment: (id: string | null) => void
@@ -214,6 +216,21 @@ export const useAppStore = create<AppState>((set) => ({
         }
         return { openTabs: newTabs }
     }),
+    closeOtherTabs: (tabId) => set((s) => {
+        const tabToKeep = s.openTabs.find(t => t.id === tabId)
+        if (!tabToKeep) return s
+        let newState: Partial<AppState> = { openTabs: [tabToKeep] }
+        newState.activeTabId = tabId
+        if (tabToKeep.type === 'docs') {
+            newState.showApiDocumentation = true
+            newState.currentApiId = null
+        } else {
+            newState.showApiDocumentation = false
+            newState.currentApiId = tabToKeep.apiId || null
+        }
+        return newState as AppState
+    }),
+    closeAllTabs: () => set({ openTabs: [], activeTabId: null, currentApiId: null, showApiDocumentation: false }),
     setActiveTab: (tabId) => set((s) => {
         const tab = s.openTabs.find(t => t.id === tabId)
         if (!tab) return s
