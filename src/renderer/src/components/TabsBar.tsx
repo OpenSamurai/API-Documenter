@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react'
+import React, { useRef, useEffect, useState } from 'react'
 import { useAppStore } from '@/stores/appStore'
 import { useAllProjectApis } from '@/hooks/useApis'
 import { METHOD_COLORS } from '@/types'
@@ -7,6 +7,18 @@ export function TabsBar() {
     const { openTabs, activeTabId, setActiveTab, closeTab, currentProjectId, apiDrafts } = useAppStore()
     const { data: allApis } = useAllProjectApis(currentProjectId)
     const containerRef = useRef<HTMLDivElement>(null)
+    const [ctx, setCtx] = useState<{ x: number; y: number; tabId: string } | null>(null)
+
+    useEffect(() => {
+        const handleEscape = (e: KeyboardEvent) => { if (e.key === 'Escape') setCtx(null) }
+        const handleClick = () => setCtx(null)
+        window.addEventListener('keydown', handleEscape)
+        window.addEventListener('click', handleClick)
+        return () => {
+            window.removeEventListener('keydown', handleEscape)
+            window.removeEventListener('click', handleClick)
+        }
+    }, [])
 
     // Scroll active tab into view
     useEffect(() => {
@@ -45,6 +57,10 @@ export function TabsBar() {
                         onClick={() => setActiveTab(tab.id)}
                         onMouseDown={(e) => {
                             if (e.button === 1) closeTab(tab.id) // Middle click to close
+                        }}
+                        onContextMenu={(e) => {
+                            e.preventDefault()
+                            setCtx({ x: e.clientX, y: e.clientY, tabId: tab.id })
                         }}
                         style={{
                             display: 'flex',
@@ -144,6 +160,55 @@ export function TabsBar() {
                     </div>
                 )
             })}
+
+            {ctx && (
+                <div
+                    style={{
+                        position: 'fixed',
+                        top: ctx.y,
+                        left: ctx.x,
+                        background: '#1F1F1F',
+                        border: '1px solid #2A2A2A',
+                        borderRadius: '6px',
+                        padding: '4px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '2px',
+                        zIndex: 1000,
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+                        minWidth: '160px'
+                    }}
+                    onClick={e => e.stopPropagation()}
+                >
+                    <button
+                        className="ctx-menu-item"
+                        onClick={() => { closeTab(ctx.tabId); setCtx(null) }}
+                        style={{ display: 'flex', alignItems: 'center', padding: '6px 12px', fontSize: '12px', color: '#E5E5E5', background: 'transparent', border: 'none', borderRadius: '4px', cursor: 'pointer', textAlign: 'left', transition: '150ms ease' }}
+                        onMouseEnter={e => e.currentTarget.style.background = '#2A2A2A'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                    >
+                        Close Tab
+                    </button>
+                    <button
+                        className="ctx-menu-item"
+                        onClick={() => { useAppStore.getState().closeOtherTabs(ctx.tabId); setCtx(null) }}
+                        style={{ display: 'flex', alignItems: 'center', padding: '6px 12px', fontSize: '12px', color: '#E5E5E5', background: 'transparent', border: 'none', borderRadius: '4px', cursor: 'pointer', textAlign: 'left', transition: '150ms ease' }}
+                        onMouseEnter={e => e.currentTarget.style.background = '#2A2A2A'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                    >
+                        Close Other Tabs
+                    </button>
+                    <button
+                        className="ctx-menu-item"
+                        onClick={() => { useAppStore.getState().closeAllTabs(); setCtx(null) }}
+                        style={{ display: 'flex', alignItems: 'center', padding: '6px 12px', fontSize: '12px', color: '#EF4444', background: 'transparent', border: 'none', borderRadius: '4px', cursor: 'pointer', textAlign: 'left', transition: '150ms ease' }}
+                        onMouseEnter={e => e.currentTarget.style.background = '#2A2A2A'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                    >
+                        Close All Tabs
+                    </button>
+                </div>
+            )}
         </div>
     )
 }
