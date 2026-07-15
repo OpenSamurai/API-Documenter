@@ -25,9 +25,11 @@ import { CookieManagerDialog } from './components/CookieManagerDialog'
 import { GlobalGitManager } from './components/GlobalGitManager'
 import { ApiDocumentationPage } from './components/ApiDocumentationPage'
 import { ConflictResolutionDialog } from './components/ConflictResolutionDialog'
+import { SidebarResizer } from './components/SidebarResizer'
 
 export function App() {
     const toggleSidebar = useAppStore(s => s.toggleSidebar)
+    const isSidebarCollapsed = useAppStore(s => s.isSidebarCollapsed)
     const currentApiId = useAppStore(s => s.currentApiId)
     const currentProjectId = useAppStore(s => s.currentProjectId)
     const isOnline = useAppStore(s => s.isOnline)
@@ -93,6 +95,8 @@ export function App() {
 
                 {/* Sidebar */}
                 {activeSidebarTab === 'explorer' ? <Sidebar /> : <GitSidebar />}
+                
+                {!isSidebarCollapsed && <SidebarResizer />}
 
                 {/* Editor area */}
                 <main style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', position: 'relative', background: '#0A0A0A' }}>

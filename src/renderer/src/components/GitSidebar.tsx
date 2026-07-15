@@ -6,7 +6,7 @@ import { useSync } from '@/hooks/useSync'
 import { ConfirmModal } from './ConfirmModal'
 
 export function GitSidebar() {
-    const { currentProjectId, currentSyncBranch, databaseUrl } = useAppStore()
+    const { currentProjectId, currentSyncBranch, databaseUrl, sidebarWidth } = useAppStore()
     const { data: projects } = useProjects()
     const currentProject = projects?.find(p => p.id === currentProjectId)
 
@@ -29,7 +29,7 @@ export function GitSidebar() {
 
     if (!currentProjectId) {
         return (
-            <aside style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '300px', background: '#0A0A0A', borderRight: '1px solid #1F1F1F', padding: '24px' }}>
+            <aside style={{ display: 'flex', flexDirection: 'column', height: '100%', width: `${sidebarWidth}px`, background: '#0A0A0A', borderRight: '1px solid #1F1F1F', padding: '24px' }}>
                 <p className="text-sm text-neutral-500">Open a project to use Source Control.</p>
             </aside>
         )
@@ -58,7 +58,7 @@ export function GitSidebar() {
     ]
 
     return (
-        <aside className="fade-in" style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '300px', background: '#0A0A0A', borderRight: '1px solid #1F1F1F' }}>
+        <aside className="fade-in" style={{ display: 'flex', flexDirection: 'column', height: '100%', width: `${sidebarWidth}px`, background: '#0A0A0A', borderRight: '1px solid #1F1F1F' }}>
             {/* Header */}
             <div style={{ display: 'flex', alignItems: 'center', padding: '0 16px', flexShrink: 0, height: '52px', borderBottom: '1px solid #1A1A1A' }}>
                 <span className="text-sm font-semibold text-white tracking-wide">SOURCE CONTROL</span>
