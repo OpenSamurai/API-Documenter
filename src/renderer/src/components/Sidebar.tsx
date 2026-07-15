@@ -41,6 +41,7 @@ export function Sidebar() {
     const databaseUrl = useAppStore(s => s.databaseUrl)
     const activeBranch = useAppStore(s => s.activeBranch)
     const currentSyncBranch = useAppStore(s => s.currentSyncBranch)
+    const sidebarWidth = useAppStore(s => s.sidebarWidth)
 
     const { data: projects } = useProjects()
     const { data: folders, isLoading: isFoldersLoading, error: foldersError } = useFolders(currentProjectId)
@@ -135,7 +136,7 @@ export function Sidebar() {
 
     return (
         <>
-            <aside className="fade-in" style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '300px', background: '#0A0A0A', borderRight: '1px solid #1F1F1F' }}>
+            <aside className="fade-in" style={{ display: 'flex', flexDirection: 'column', height: '100%', width: `${sidebarWidth}px`, background: '#0A0A0A', borderRight: '1px solid #1F1F1F' }}>
 
                 {/* ═══ Brand header ═══ */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px', flexShrink: 0, height: '52px', borderBottom: '1px solid #1A1A1A' }}>
